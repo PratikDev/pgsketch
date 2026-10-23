@@ -657,7 +657,7 @@ The build is 121 thin phases in 16 milestones; each phase changes at most three 
 | A6 | End-to-end testing: Playwright `_electron` | `apps/desktop/playwright.config.ts` | An E2E spec launches the app and reads the window title | done |
 | A7 | CI: install, lint, typecheck, unit and component tests | `.github/workflows/ci.yml` | A push produces a green run | done |
 | A8 | Postgres test helper with Testcontainers, version from `PG_VERSION` env (default 16) | `core/test/pg.ts` | *DB*: `SELECT version()` returns the expected major version | done |
-| A9 | CI matrix for Postgres 14–18 on DB tests, plus the E2E job | `ci.yml` | Five green DB jobs and a green E2E job | todo |
+| A9 | CI matrix for Postgres 14–18 on DB tests, plus the E2E job | `ci.yml` | Five green DB jobs and a green E2E job | working |
 
 ### B. Core model and SQL primitives
 
