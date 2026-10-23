@@ -121,3 +121,27 @@ The plan puts validation in `model/validate.ts`. The name rules are in `model/va
 `fkTypesCompatible(fkType, keyType)` is a directed table of built-in types, plus "same type, any length or precision". Numbers and times only go one way: an integer column can reference a numeric or float key but not the reverse, and `time` can reference `timetz` or `interval` but not the reverse. `text`, `varchar` and `bpchar` match each other, as do `date`, `timestamp` and `timestamptz`. Arrays and user-defined types (enums, domains) only match the exact same type. `test/fk-types.db.test.ts` checks all 676 pairs of 26 common types against real Postgres and passes on 14, 16 and 18.
 
 **Rationale:** my first guess (two symmetric families) was wrong for 27 pairs. A wrong "incompatible" blocks a valid migration and a wrong "compatible" only shows up later in Validate, so the table follows what Postgres accepts. Types not in the matrix (for example `bit`, `inet`) only match themselves until they are tested.
+
+## Auto-names follow Postgres's two namespaces, not the plan's single "per schema" rule
+
+**Date & time:** 2026-10-24 (B7, uncommitted)
+
+`assignNames` picks a free name for PK, unique and index objects among all relation names in the schema (tables, indexes, views, sequences, PK/unique names), and for FK and check objects among all constraint names in the schema, across tables. So a foreign key on `a(b_c)` and one on `a_b(c)` get `a_b_c_fkey` and `a_b_c_fkey1`. Validation (B5) still only requires constraint names to be unique per table, which is what Postgres enforces.
+
+**Rationale:** this is what Postgres itself does when choosing a default name; a DB test over six scenarios (repeats, very long names, multibyte names, cross-table collisions, names already taken) matches it exactly on 14, 16 and 18. Breaking the namespace rule makes three scenarios fail.
+
+## Auto-names are assigned in a fixed order
+
+**Date & time:** 2026-10-24 (B7, uncommitted)
+
+Objects are named in the order schema name, table name, kind (PK, unique, FK, check, index), column names, then id. Collision numbers depend on that order, not on object ids or when they were added.
+
+**Rationale:** the plan asks for deterministic collision numbers. Objects can only collide with others of the same kind (the label differs), so the order across kinds has no effect on the result.
+
+## Shared UTF-8 helpers
+
+**Date & time:** 2026-10-24 (B7, uncommitted)
+
+`model/utf8.ts` holds `utf8Length` and `clipUtf8`, used by both name validation and naming.
+
+**Rationale:** both need Postgres's 63-byte limit counted in bytes, and one copy avoids drift.
