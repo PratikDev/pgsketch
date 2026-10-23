@@ -655,7 +655,7 @@ The build is 121 thin phases in 16 milestones; each phase changes at most three 
 | A4 | Add Tailwind and initialize shadcn/ui in the renderer | *generated* | A shadcn `Button` renders with Tailwind styles | done |
 | A5 | Component testing: Vitest with jsdom and React Testing Library in the desktop app | `apps/desktop/vitest.config.ts`, `renderer/test-setup.ts` | A component test renders the placeholder App | done |
 | A6 | End-to-end testing: Playwright `_electron` | `apps/desktop/playwright.config.ts` | An E2E spec launches the app and reads the window title | done |
-| A7 | CI: install, lint, typecheck, unit and component tests | `.github/workflows/ci.yml` | A push produces a green run | todo |
+| A7 | CI: install, lint, typecheck, unit and component tests | `.github/workflows/ci.yml` | A push produces a green run | working |
 | A8 | Postgres test helper with Testcontainers, version from `PG_VERSION` env (default 16) | `core/test/pg.ts` | *DB*: `SELECT version()` returns the expected major version | todo |
 | A9 | CI matrix for Postgres 14–18 on DB tests, plus the E2E job | `ci.yml` | Five green DB jobs and a green E2E job | todo |
 
