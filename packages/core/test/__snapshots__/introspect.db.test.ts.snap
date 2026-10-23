@@ -1,0 +1,298 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`a snapshot of fixtures/basic.sql: two schemas, cross-schema FK, enum, view 1`] = `
+{
+  "enums": [
+    {
+      "enum": "public.user_status",
+      "labels": [
+        "active",
+        "banned",
+      ],
+    },
+  ],
+  "schemas": [
+    "billing",
+    "public",
+  ],
+  "tables": [
+    {
+      "columns": [
+        {
+          "comment": null,
+          "default": null,
+          "identity": "byDefault",
+          "name": "id",
+          "notNull": true,
+          "position": 1,
+          "type": "integer",
+        },
+        {
+          "comment": null,
+          "default": null,
+          "identity": null,
+          "name": "issued",
+          "notNull": true,
+          "position": 2,
+          "type": "date",
+        },
+        {
+          "comment": null,
+          "default": null,
+          "identity": null,
+          "name": "user_id",
+          "notNull": true,
+          "position": 3,
+          "type": "bigint",
+        },
+        {
+          "comment": null,
+          "default": "0",
+          "identity": null,
+          "name": "total",
+          "notNull": true,
+          "position": 4,
+          "type": "numeric(10,2)",
+        },
+      ],
+      "comment": null,
+      "constraints": [
+        {
+          "columns": [
+            "id",
+            "issued",
+          ],
+          "kind": "pk",
+          "name": "invoices_pkey",
+        },
+        {
+          "columns": [
+            "total",
+          ],
+          "expression": "(total >= (0)::numeric)",
+          "kind": "check",
+          "name": "invoices_total_check",
+        },
+        {
+          "columns": [
+            "user_id",
+          ],
+          "kind": "fk",
+          "name": "invoices_user_id_fkey",
+          "onDelete": "cascade",
+          "onUpdate": "no action",
+          "references": "public.users(id)",
+        },
+      ],
+      "indexes": [
+        {
+          "columns": [
+            "total",
+          ],
+          "name": "invoices_open_idx",
+          "readOnly": "partial-index",
+          "unique": false,
+        },
+        {
+          "columns": [
+            "user_id",
+          ],
+          "name": "invoices_user_id_idx",
+          "unique": false,
+        },
+      ],
+      "table": "billing.invoices",
+    },
+    {
+      "columns": [
+        {
+          "comment": null,
+          "default": "nextval('billing.line_items_id_seq'::regclass)",
+          "identity": null,
+          "name": "id",
+          "notNull": true,
+          "position": 1,
+          "readOnly": "nextval-default",
+          "type": "integer",
+        },
+        {
+          "comment": null,
+          "default": null,
+          "identity": null,
+          "name": "invoice_id",
+          "notNull": true,
+          "position": 2,
+          "type": "integer",
+        },
+        {
+          "comment": null,
+          "default": null,
+          "identity": null,
+          "name": "issued",
+          "notNull": true,
+          "position": 3,
+          "type": "date",
+        },
+        {
+          "comment": null,
+          "default": null,
+          "identity": null,
+          "name": "label",
+          "notNull": false,
+          "position": 4,
+          "type": "varchar(80)",
+        },
+      ],
+      "comment": null,
+      "constraints": [
+        {
+          "columns": [
+            "invoice_id",
+            "issued",
+          ],
+          "kind": "fk",
+          "name": "line_items_invoice_id_issued_fkey",
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "references": "billing.invoices(id, issued)",
+        },
+        {
+          "columns": [
+            "id",
+          ],
+          "kind": "pk",
+          "name": "line_items_pkey",
+        },
+      ],
+      "indexes": [],
+      "table": "billing.line_items",
+    },
+    {
+      "columns": [
+        {
+          "comment": null,
+          "default": null,
+          "identity": "always",
+          "name": "id",
+          "notNull": true,
+          "position": 1,
+          "type": "bigint",
+        },
+        {
+          "comment": "Login email",
+          "default": null,
+          "identity": null,
+          "name": "email",
+          "notNull": true,
+          "position": 2,
+          "type": "text",
+        },
+        {
+          "comment": null,
+          "default": "'active'::public.user_status",
+          "identity": null,
+          "name": "status",
+          "notNull": true,
+          "position": 3,
+          "type": ""public"."user_status"",
+        },
+        {
+          "comment": null,
+          "default": null,
+          "identity": null,
+          "name": "invited_by",
+          "notNull": false,
+          "position": 4,
+          "type": "bigint",
+        },
+        {
+          "comment": null,
+          "default": "now()",
+          "identity": null,
+          "name": "created_at",
+          "notNull": true,
+          "position": 5,
+          "type": "timestamptz",
+        },
+      ],
+      "comment": "Registered users",
+      "constraints": [
+        {
+          "columns": [
+            "email",
+          ],
+          "kind": "unique",
+          "name": "users_email_key",
+        },
+        {
+          "columns": [
+            "invited_by",
+          ],
+          "kind": "fk",
+          "name": "users_invited_by_fkey",
+          "onDelete": "no action",
+          "onUpdate": "no action",
+          "references": "public.users(id)",
+        },
+        {
+          "columns": [
+            "id",
+          ],
+          "kind": "pk",
+          "name": "users_pkey",
+        },
+      ],
+      "indexes": [],
+      "table": "public.users",
+    },
+  ],
+  "unmodeled": [
+    {
+      "columns": [
+        "billing.invoices.id",
+      ],
+      "kind": "sequence",
+      "name": "invoices_id_seq",
+      "schema": "billing",
+      "tables": [
+        "billing.invoices",
+      ],
+    },
+    {
+      "columns": [
+        "billing.line_items.id",
+      ],
+      "kind": "sequence",
+      "name": "line_items_id_seq",
+      "schema": "billing",
+      "tables": [
+        "billing.line_items",
+      ],
+    },
+    {
+      "columns": [
+        "public.users.id",
+      ],
+      "kind": "sequence",
+      "name": "users_id_seq",
+      "schema": "public",
+      "tables": [
+        "public.users",
+      ],
+    },
+    {
+      "columns": [
+        "billing.invoices.id",
+        "billing.invoices.issued",
+        "billing.invoices.total",
+      ],
+      "kind": "view",
+      "name": "open_invoices",
+      "schema": "billing",
+      "tables": [
+        "billing.invoices",
+      ],
+    },
+  ],
+}
+`;
