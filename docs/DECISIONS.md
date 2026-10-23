@@ -1,6 +1,6 @@
 # Decisions
 
-Decisions made while building. The settled 0.1.0 decisions are in the build plan's Decisions table. Times are the commit time of the phase (UTC+6); entries marked "uncommitted" were made at the time of writing.
+Decisions made while building. The settled 0.1.0 decisions are in the build plan's Decisions table. Times are the commit time of the phase (UTC+6); entries marked "uncommitted" were made before the phase was committed.
 
 ## TypeScript pinned to 6.0.x
 
@@ -68,7 +68,7 @@ DB tests are named `*.db.test.ts`. `pnpm test` excludes them and `pnpm --filter 
 
 ## `unmodeledId` helper with a kind prefix
 
-**Date & time:** 2026-10-24 (B2, uncommitted)
+**Date & time:** 2026-10-24 02:23 (B2)
 
 Unmodeled objects get IDs of the form `u:<kind>:<oid>`, for example `u:view:8`. The plan's ID list did not cover them.
 
@@ -76,8 +76,24 @@ Unmodeled objects get IDs of the form `u:<kind>:<oid>`, for example `u:view:8`. 
 
 ## Quoting rejects empty names and NUL, and uses `E'...'` for backslashes
 
-**Date & time:** 2026-10-24 (B3, uncommitted)
+**Date & time:** 2026-10-24 02:23 (B3)
 
 `quoteIdent` throws on an empty name, and both quote functions throw on a NUL character. `quoteLiteral` emits an `E'...'` string with doubled backslashes whenever the value contains a backslash.
 
 **Rationale:** Postgres cannot hold either of those characters, so the output would be invalid SQL. The `E'...'` form stays correct whether or not `standard_conforming_strings` is on, which a DB test checks against real Postgres.
+
+## Built-in type names use short SQL aliases in the model
+
+**Date & time:** 2026-10-24 (B4, uncommitted)
+
+`parsePgType` turns `format_type` text into `PgType` with the names the type picker offers: `varchar`, `bpchar`, `timestamp`, `timestamptz`, `time`, `timetz` and `varbit`. Other built-ins keep their `format_type` spelling (`integer`, `double precision`, `"char"`, `interval day to second`). Types with a schema keep their own name and are always quoted when rendered.
+
+**Rationale:** the plan's examples and the risk tables use these short names, and each one renders back to valid SQL with the same meaning (for example `bpchar(10)` is `character(10)`). A DB test checks that parse then render gives the same `format_type` on real Postgres.
+
+## Non-integer type modifiers are not representable and throw
+
+**Date & time:** 2026-10-24 (B4, uncommitted)
+
+`parsePgType` throws on modifiers like PostGIS `geometry(Point,4326)`, because `PgType.params` only holds integers. `renderPgType` also rejects built-in names that aren't plain lowercase words and parameters that aren't non-negative integers.
+
+**Rationale:** failing loudly is safer than silently dropping the modifier, and rendering a name unquoted must never carry SQL. Phase C5 (columns query) has to catch this error and mark the column read-only; the plan has no read-only reason for it yet, so C5 will need to add one.
