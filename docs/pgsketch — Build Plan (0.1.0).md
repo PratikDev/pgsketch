@@ -643,209 +643,210 @@ The build is 121 thin phases in 16 milestones; each phase changes at most three 
 - A phase is done when its **Test** passes locally and in CI. Never start the next phase on a red build.
 - Core milestones (B–H) need no UI and come first: by the end of H, the whole schema-to-SQL pipeline is proven against real Postgres before any canvas work starts.
 - Tests marked *DB* run against a real Postgres container through `test/pg.ts`.
+- The **Status** column tracks each phase: `todo` (default), `working` while it's being built, `done` once its test passes and it's complete.
 
 ### A. Project setup
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| A1 | Initialize the pnpm monorepo, strict base TS config, ESLint, Prettier | *generated* (`package.json`, `pnpm-workspace.yaml`, `tsconfig.base.json`, lint configs) | `pnpm install` and `pnpm lint` succeed |
-| A2 | Scaffold `packages/core` with Vitest | *generated* (package config, `src/index.ts`, `vitest.config.ts`) | A placeholder Vitest test passes |
-| A3 | Scaffold `apps/desktop` with the electron-vite React TS template | *generated* | `pnpm dev` opens a window |
-| A4 | Add Tailwind and initialize shadcn/ui in the renderer | *generated* | A shadcn `Button` renders with Tailwind styles |
-| A5 | Component testing: Vitest with jsdom and React Testing Library in the desktop app | `apps/desktop/vitest.config.ts`, `renderer/test-setup.ts` | A component test renders the placeholder App |
-| A6 | End-to-end testing: Playwright `_electron` | `apps/desktop/playwright.config.ts` | An E2E spec launches the app and reads the window title |
-| A7 | CI: install, lint, typecheck, unit and component tests | `.github/workflows/ci.yml` | A push produces a green run |
-| A8 | Postgres test helper with Testcontainers, version from `PG_VERSION` env (default 16) | `core/test/pg.ts` | *DB*: `SELECT version()` returns the expected major version |
-| A9 | CI matrix for Postgres 14–18 on DB tests, plus the E2E job | `ci.yml` | Five green DB jobs and a green E2E job |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| A1 | Initialize the pnpm monorepo, strict base TS config, ESLint, Prettier | *generated* (`package.json`, `pnpm-workspace.yaml`, `tsconfig.base.json`, lint configs) | `pnpm install` and `pnpm lint` succeed | done |
+| A2 | Scaffold `packages/core` with Vitest | *generated* (package config, `src/index.ts`, `vitest.config.ts`) | A placeholder Vitest test passes | todo |
+| A3 | Scaffold `apps/desktop` with the electron-vite React TS template | *generated* | `pnpm dev` opens a window | todo |
+| A4 | Add Tailwind and initialize shadcn/ui in the renderer | *generated* | A shadcn `Button` renders with Tailwind styles | todo |
+| A5 | Component testing: Vitest with jsdom and React Testing Library in the desktop app | `apps/desktop/vitest.config.ts`, `renderer/test-setup.ts` | A component test renders the placeholder App | todo |
+| A6 | End-to-end testing: Playwright `_electron` | `apps/desktop/playwright.config.ts` | An E2E spec launches the app and reads the window title | todo |
+| A7 | CI: install, lint, typecheck, unit and component tests | `.github/workflows/ci.yml` | A push produces a green run | todo |
+| A8 | Postgres test helper with Testcontainers, version from `PG_VERSION` env (default 16) | `core/test/pg.ts` | *DB*: `SELECT version()` returns the expected major version | todo |
+| A9 | CI matrix for Postgres 14–18 on DB tests, plus the E2E job | `ci.yml` | Five green DB jobs and a green E2E job | todo |
 
 ### B. Core model and SQL primitives
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| B1 | All schema model interfaces: `readOnly` reasons, identity kind, `exclusion` constraint kind, `unmodeled` map | `model/types.ts` | A fixture model typechecks |
-| B2 | ID helpers: OID-based IDs and `newId()` | `model/ids.ts` | Same OIDs give same IDs; new IDs are unique |
-| B3 | `quoteIdent`, `quoteLiteral`, `qualified(schema, name)` | `sql/quote.ts` | Embedded quotes, mixed case, reserved words, unicode, empty strings |
-| B4 | Parse `format_type` output into `PgType`; render `PgType` back to SQL | `sql/pgtype.ts` | Table-driven: `varchar(255)`, `numeric(10,2)`, `timestamptz`, `text[]`, schema-qualified enum |
-| B5 | Validation: empty and over-63-byte names; Postgres namespaces (relations per schema, constraints per table, PK/unique names as index names) | `model/validate.ts` | An index named like a table fails; two tables with the same check name pass |
-| B6 | Validation: one PK per table, existing referenced columns, PK and identity coupling, FK targets (PK, unique constraint, or qualifying unique index; self-references allowed), type parameters, pending table schema exists | `model/validate.ts` | FK onto a partial unique index fails; an index on a removed column fails; a nullable PK column fails |
-| B7 | Naming: port of `makeObjectName`, numbered collision handling, and the `assignNames` pass over auto-named objects | `model/naming.ts` | *DB*: unnamed PK, unique, FK, one- and multi-column checks and indexes created in a container, including very long names and collisions, get the same names as ours; renaming a pending table renames its auto-named constraints while a user-named one stays |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| B1 | All schema model interfaces: `readOnly` reasons, identity kind, `exclusion` constraint kind, `unmodeled` map | `model/types.ts` | A fixture model typechecks | todo |
+| B2 | ID helpers: OID-based IDs and `newId()` | `model/ids.ts` | Same OIDs give same IDs; new IDs are unique | todo |
+| B3 | `quoteIdent`, `quoteLiteral`, `qualified(schema, name)` | `sql/quote.ts` | Embedded quotes, mixed case, reserved words, unicode, empty strings | todo |
+| B4 | Parse `format_type` output into `PgType`; render `PgType` back to SQL | `sql/pgtype.ts` | Table-driven: `varchar(255)`, `numeric(10,2)`, `timestamptz`, `text[]`, schema-qualified enum | todo |
+| B5 | Validation: empty and over-63-byte names; Postgres namespaces (relations per schema, constraints per table, PK/unique names as index names) | `model/validate.ts` | An index named like a table fails; two tables with the same check name pass | todo |
+| B6 | Validation: one PK per table, existing referenced columns, PK and identity coupling, FK targets (PK, unique constraint, or qualifying unique index; self-references allowed), type parameters, pending table schema exists | `model/validate.ts` | FK onto a partial unique index fails; an index on a removed column fails; a nullable PK column fails | todo |
+| B7 | Naming: port of `makeObjectName`, numbered collision handling, and the `assignNames` pass over auto-named objects | `model/naming.ts` | *DB*: unnamed PK, unique, FK, one- and multi-column checks and indexes created in a container, including very long names and collisions, get the same names as ours; renaming a pending table renames its auto-named constraints while a user-named one stays | todo |
 
 ### C. Introspection
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| C1 | `Query` type and read-only `REPEATABLE READ` snapshot helper with `search_path = ''` | `introspect/query.ts` | *DB*: queries inside report `repeatable read`, reject writes, and return fully qualified expressions |
-| C2 | Extension-owned object detection via `pg_depend` | `introspect/extensions.ts` | *DB*: after `CREATE EXTENSION pg_trgm`, its objects are listed |
-| C3 | Schemas query | `introspect/schemas.ts` | *DB*: user schemas returned, system schemas excluded |
-| C4 | Tables query, comments; partitioned tables and partitions read-only | `introspect/tables.ts` | *DB*: a partition child is marked read-only |
-| C5 | Columns query: types, NOT NULL, raw defaults, identity kind, generated flag, comments | `introspect/columns.ts` | *DB*: a generated column is read-only; identity `ALWAYS` and `BY DEFAULT` are distinguished |
-| C6 | Constraints query: PK, unique, check with `conkey` columns, FK (actions, match type), deferrable, validated, no-inherit; exclusion as `kind: 'exclusion'`; `contype 'n'` excluded | `introspect/constraints.ts` | *DB*: on Postgres 18, NOT NULL columns produce no constraint objects; a multi-column check lists both columns; a `NOT VALID` FK is read-only |
-| C7 | Indexes query with full read-only classification; constraint-backed indexes folded | `introspect/indexes.ts` | *DB*: plain unique index editable; partial, expression, GIN, `DESC`, `INCLUDE` and `NULLS NOT DISTINCT` indexes read-only |
-| C8 | Enums query with ordered labels (read-only) | `introspect/enums.ts` | *DB*: labels returned in `enumsortorder` |
-| C9 | Unmodeled objects and dependencies: views, materialized views, foreign tables, sequences, triggers, functions, policies | `introspect/unmodeled.ts` | *DB*: a view depending on a column is linked to that column |
-| C10 | Cast data (all of `pg_cast`, type categories) and coercion rules | `introspect/casts.ts`, `sql/coercion.ts` | *DB*: for a matrix of type pairs (integers, numerics, text, varchar lengths, enum, arrays, domain), our "needs `USING`" answer matches whether an `INSERT` of the old type into the new type succeeds, on Postgres 14–18 |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| C1 | `Query` type and read-only `REPEATABLE READ` snapshot helper with `search_path = ''` | `introspect/query.ts` | *DB*: queries inside report `repeatable read`, reject writes, and return fully qualified expressions | todo |
+| C2 | Extension-owned object detection via `pg_depend` | `introspect/extensions.ts` | *DB*: after `CREATE EXTENSION pg_trgm`, its objects are listed | todo |
+| C3 | Schemas query | `introspect/schemas.ts` | *DB*: user schemas returned, system schemas excluded | todo |
+| C4 | Tables query, comments; partitioned tables and partitions read-only | `introspect/tables.ts` | *DB*: a partition child is marked read-only | todo |
+| C5 | Columns query: types, NOT NULL, raw defaults, identity kind, generated flag, comments | `introspect/columns.ts` | *DB*: a generated column is read-only; identity `ALWAYS` and `BY DEFAULT` are distinguished | todo |
+| C6 | Constraints query: PK, unique, check with `conkey` columns, FK (actions, match type), deferrable, validated, no-inherit; exclusion as `kind: 'exclusion'`; `contype 'n'` excluded | `introspect/constraints.ts` | *DB*: on Postgres 18, NOT NULL columns produce no constraint objects; a multi-column check lists both columns; a `NOT VALID` FK is read-only | todo |
+| C7 | Indexes query with full read-only classification; constraint-backed indexes folded | `introspect/indexes.ts` | *DB*: plain unique index editable; partial, expression, GIN, `DESC`, `INCLUDE` and `NULLS NOT DISTINCT` indexes read-only | todo |
+| C8 | Enums query with ordered labels (read-only) | `introspect/enums.ts` | *DB*: labels returned in `enumsortorder` | todo |
+| C9 | Unmodeled objects and dependencies: views, materialized views, foreign tables, sequences, triggers, functions, policies | `introspect/unmodeled.ts` | *DB*: a view depending on a column is linked to that column | todo |
+| C10 | Cast data (all of `pg_cast`, type categories) and coercion rules | `introspect/casts.ts`, `sql/coercion.ts` | *DB*: for a matrix of type pairs (integers, numerics, text, varchar lengths, enum, arrays, domain), our "needs `USING`" answer matches whether an `INSERT` of the old type into the new type succeeds, on Postgres 14–18 | todo |
 
 ### D. Fingerprint
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| D1 | Fingerprint query over selected definition columns plus OIDs | `fingerprint/fingerprint.ts` | *DB*: stable when nothing changes and after `INSERT`, `VACUUM`, `VACUUM FULL` and `ANALYZE`; changes after each kind of DDL and after dropping and recreating an identical table; editing a function body or a policy doesn't change it |
-| D2 | Coverage guard against the database's real catalog table list | `fingerprint/fingerprint.ts` | Fails when an introspection query reads a catalog table the fingerprint doesn't cover; ignores functions like `pg_get_expr` |
-| D3 | Assemble model, cast data and fingerprint in one snapshot | `introspect/index.ts` | *DB*: snapshot test of `fixtures/basic.sql`; fingerprint read in the same transaction |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| D1 | Fingerprint query over selected definition columns plus OIDs | `fingerprint/fingerprint.ts` | *DB*: stable when nothing changes and after `INSERT`, `VACUUM`, `VACUUM FULL` and `ANALYZE`; changes after each kind of DDL and after dropping and recreating an identical table; editing a function body or a policy doesn't change it | todo |
+| D2 | Coverage guard against the database's real catalog table list | `fingerprint/fingerprint.ts` | Fails when an introspection query reads a catalog table the fingerprint doesn't cover; ignores functions like `pg_get_expr` | todo |
+| D3 | Assemble model, cast data and fingerprint in one snapshot | `introspect/index.ts` | *DB*: snapshot test of `fixtures/basic.sql`; fingerprint read in the same transaction | todo |
 
 ### E. Diff engine
 
 All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| E1 | `ChangeOp` union type | `diff/ops.ts` | Typecheck |
-| E2 | Schemas: create | `diff/schemas.ts` | A new schema yields `createSchema` |
-| E3 | Tables: create, rename, drop; schema change on an existing table is a blocking error | `diff/tables.ts` | Renamed table keeps its ID and yields `renameTable`, not drop + create |
-| E4 | Columns: add (including identity on new columns), drop, rename | `diff/columns.ts` | Same identity check for columns |
-| E5 | Columns: type, NOT NULL, default changes | `diff/columns.ts` | One op per changed property |
-| E6 | Constraints: add, drop, rename; changed = drop + add; self-referencing FKs | `diff/constraints.ts` | Changed FK action yields drop + add; renamed constraint yields `renameConstraint` |
-| E7 | Indexes: same rules as constraints | `diff/indexes.ts` | Column order change yields drop + add; rename yields `renameIndex` |
-| E8 | Comments on tables and columns | `diff/comments.ts` | Set, change, clear |
-| E9 | Read-only guard: block changes that would drop dependent read-only objects | `diff/readonly-guard.ts` | Dropping a column used by a view or by a read-only FK on another table returns a blocking error, no op; a partial index on the same table is dropped and flagged destructive |
-| E10 | FK type-change rule: drop and re-add only when both sides change to an incompatible in-between state | `diff/fk-type-changes.ts` | `int → bigint` on one side emits no extra ops; `uuid → text` on both sides emits drop + add |
-| E11 | Assemble the diff, including dropping FKs that point at dropped tables or columns | `diff/index.ts` | Dropping a referenced table also yields `dropConstraint` for the referencing FK |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| E1 | `ChangeOp` union type | `diff/ops.ts` | Typecheck | todo |
+| E2 | Schemas: create | `diff/schemas.ts` | A new schema yields `createSchema` | todo |
+| E3 | Tables: create, rename, drop; schema change on an existing table is a blocking error | `diff/tables.ts` | Renamed table keeps its ID and yields `renameTable`, not drop + create | todo |
+| E4 | Columns: add (including identity on new columns), drop, rename | `diff/columns.ts` | Same identity check for columns | todo |
+| E5 | Columns: type, NOT NULL, default changes | `diff/columns.ts` | One op per changed property | todo |
+| E6 | Constraints: add, drop, rename; changed = drop + add; self-referencing FKs | `diff/constraints.ts` | Changed FK action yields drop + add; renamed constraint yields `renameConstraint` | todo |
+| E7 | Indexes: same rules as constraints | `diff/indexes.ts` | Column order change yields drop + add; rename yields `renameIndex` | todo |
+| E8 | Comments on tables and columns | `diff/comments.ts` | Set, change, clear | todo |
+| E9 | Read-only guard: block changes that would drop dependent read-only objects | `diff/readonly-guard.ts` | Dropping a column used by a view or by a read-only FK on another table returns a blocking error, no op; a partial index on the same table is dropped and flagged destructive | todo |
+| E10 | FK type-change rule: drop and re-add only when both sides change to an incompatible in-between state | `diff/fk-type-changes.ts` | `int → bigint` on one side emits no extra ops; `uuid → text` on both sides emits drop + add | todo |
+| E11 | Assemble the diff, including dropping FKs that point at dropped tables or columns | `diff/index.ts` | Dropping a referenced table also yields `dropConstraint` for the referencing FK | todo |
 
 ### F. Ordering and SQL rendering
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| F1 | Phase assignment and deterministic sort | `order/order.ts` | FK added after its target table; same input gives identical order |
-| F2 | Render schema statements | `render/schemas.ts` | Snapshot of `CREATE SCHEMA` |
-| F3 | Render table statements | `render/tables.ts` | Snapshot: create with identity PK, rename, drop |
-| F4 | Render column statements; `USING` only where the coercion rules find no assignment conversion | `render/columns.ts` | Snapshot: `text → integer` includes `USING`; `varchar(50) → varchar(20)` doesn't |
-| F5 | Render constraint and index statements, including renames | `render/constraints.ts`, `render/indexes.ts` | Snapshot: composite FK with actions; index rename |
-| F6 | Render comment statements | `render/comments.ts` | Snapshot with a quote inside the comment |
-| F7 | Assemble the migration: header from `context`, `BEGIN`/`COMMIT`; return text and statement array | `render/migration.ts` | Snapshot with fixed `generatedAt` is byte-identical across runs |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| F1 | Phase assignment and deterministic sort | `order/order.ts` | FK added after its target table; same input gives identical order | todo |
+| F2 | Render schema statements | `render/schemas.ts` | Snapshot of `CREATE SCHEMA` | todo |
+| F3 | Render table statements | `render/tables.ts` | Snapshot: create with identity PK, rename, drop | todo |
+| F4 | Render column statements; `USING` only where the coercion rules find no assignment conversion | `render/columns.ts` | Snapshot: `text → integer` includes `USING`; `varchar(50) → varchar(20)` doesn't | todo |
+| F5 | Render constraint and index statements, including renames | `render/constraints.ts`, `render/indexes.ts` | Snapshot: composite FK with actions; index rename | todo |
+| F6 | Render comment statements | `render/comments.ts` | Snapshot with a quote inside the comment | todo |
+| F7 | Assemble the migration: header from `context`, `BEGIN`/`COMMIT`; return text and statement array | `render/migration.ts` | Snapshot with fixed `generatedAt` is byte-identical across runs | todo |
 
 ### G. Risk classification
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| G1 | Type-change matrix: safe widenings and lossy conversions | `risk/type-changes.ts` | Table-driven; an unlisted pair returns "may fail" |
-| G2 | `assessRisk` for every op kind | `risk/assess.ts` | One case per level; `addIndex` is "locks"; `addColumn` NOT NULL without default is "may fail" |
-| G3 | Warning comments and risk counts in the migration | `render/migration.ts` | Snapshot shows `-- WARNING` above a `DROP COLUMN` |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| G1 | Type-change matrix: safe widenings and lossy conversions | `risk/type-changes.ts` | Table-driven; an unlisted pair returns "may fail" | todo |
+| G2 | `assessRisk` for every op kind | `risk/assess.ts` | One case per level; `addIndex` is "locks"; `addColumn` NOT NULL without default is "may fail" | todo |
+| G3 | Warning comments and risk counts in the migration | `render/migration.ts` | Snapshot shows `-- WARNING` above a `DROP COLUMN` | todo |
 
 ### H. Round trips and normalization
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| H1 | Name-based comparison: does a model match the desired model by qualified names? | `diff/applied.ts` | Same schema with different IDs matches; one extra column doesn't |
-| H2 | Round-trip helper: apply migration to a fresh database, re-introspect, compare with `applied.ts` | `test/roundtrip.ts` | *DB*: 20 hand-written edit cases round-trip exactly |
-| H3 | `fast-check` arbitraries for models and edits | `test/arbitraries.ts` | *DB*: property test, 200 runs, every generated edit round-trips |
-| H4 | Expression normalization on its own connection, whole-table temp copy, extended protocol, TEMP fallback | `normalize/expression.ts` | *DB*: `CURRENT_TIMESTAMP` and `now()` normalize alike; an unqualified `uuid_generate_v4()` from an extension in `public` comes back as `public.uuid_generate_v4()`; `end_date > start_date` normalizes; `1); COMMIT; …` fails; a role without TEMP gets the fallback |
-| H5 | Normalization used by round trips so defaults compare cleanly | `test/roundtrip.ts` | *DB*: round trips with custom defaults produce no phantom diff |
-| H6 | Nightly property run with 2,000 cases across Postgres 14–18 | `.github/workflows/nightly.yml` | A manual trigger of the workflow passes |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| H1 | Name-based comparison: does a model match the desired model by qualified names? | `diff/applied.ts` | Same schema with different IDs matches; one extra column doesn't | todo |
+| H2 | Round-trip helper: apply migration to a fresh database, re-introspect, compare with `applied.ts` | `test/roundtrip.ts` | *DB*: 20 hand-written edit cases round-trip exactly | todo |
+| H3 | `fast-check` arbitraries for models and edits | `test/arbitraries.ts` | *DB*: property test, 200 runs, every generated edit round-trips | todo |
+| H4 | Expression normalization on its own connection, whole-table temp copy, extended protocol, TEMP fallback | `normalize/expression.ts` | *DB*: `CURRENT_TIMESTAMP` and `now()` normalize alike; an unqualified `uuid_generate_v4()` from an extension in `public` comes back as `public.uuid_generate_v4()`; `end_date > start_date` normalizes; `1); COMMIT; …` fails; a role without TEMP gets the fallback | todo |
+| H5 | Normalization used by round trips so defaults compare cleanly | `test/roundtrip.ts` | *DB*: round trips with custom defaults produce no phantom diff | todo |
+| H6 | Nightly property run with 2,000 cases across Postgres 14–18 | `.github/workflows/nightly.yml` | A manual trigger of the workflow passes | todo |
 
 ### I. Desktop main process foundation
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| I1 | All IPC channel names and zod schemas | `shared/ipc-contract.ts` | Valid inputs parse; malformed ones are rejected |
-| I2 | Generic IPC register helper, domain registry, typed preload bridge | `main/ipc/register.ts`, `main/ipc/index.ts`, `preload/index.ts` | A `ping` channel round-trips; an invalid payload is rejected in main |
-| I3 | Logger with password and connection-string redaction | `main/log.ts` | A logged URL has its password removed |
-| I4 | App database with migrations | `store/db.ts`, `store/migrations/001_init.sql` | Temp database reaches `user_version = 1` with all four tables and the SSL and URL columns |
-| I5 | Connections repository | `store/connections.ts` | Insert, list by recency, delete; URL stored without password or `sslmode` |
-| I6 | Secrets with keyring backend check | `services/secrets.ts` | With `basic_text` or `unknown` mocked, remembering a password is refused; the check never runs before `ready` |
-| I7 | Driver error mapping, including SSL errors | `services/errors.ts` | Each signal in the error table maps to its message |
-| I8 | Main connection: SSL options built per mode (with `prefer` fallback), `search_path` pin, version check, `application_name`, serialized queries | `services/connection.ts`, `services/ssl.ts` | *DB*: against an SSL-enabled container, `require` connects, `verify-full` with the wrong CA fails, `prefer` falls back on a server without SSL; Postgres 13 is rejected; concurrent queries never interleave |
-| I9 | Task connections and `runSingle` (`queryMode: 'extended'`) | `services/task-connection.ts`, `services/run-single.ts` | *DB*: a task connection's open transaction is invisible to the main connection; `SELECT 1; SELECT 2` through `runSingle` fails |
-| I10 | Data directory with `PGSKETCH_DATA_DIR` override; single app instance | `main/paths.ts`, `main/index.ts` | E2E: two instances with different data directories run side by side; a second launch with the same one focuses the first and exits |
-| I11 | Connection channels: `defaults`, `test`, `open`, `openSaved`, `close`, `recent`, `forget` | `main/ipc/connection.ts` | E2E: the renderer's `connection.test` reaches a container; `openSaved` works without the renderer ever receiving the password |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| I1 | All IPC channel names and zod schemas | `shared/ipc-contract.ts` | Valid inputs parse; malformed ones are rejected | todo |
+| I2 | Generic IPC register helper, domain registry, typed preload bridge | `main/ipc/register.ts`, `main/ipc/index.ts`, `preload/index.ts` | A `ping` channel round-trips; an invalid payload is rejected in main | todo |
+| I3 | Logger with password and connection-string redaction | `main/log.ts` | A logged URL has its password removed | todo |
+| I4 | App database with migrations | `store/db.ts`, `store/migrations/001_init.sql` | Temp database reaches `user_version = 1` with all four tables and the SSL and URL columns | todo |
+| I5 | Connections repository | `store/connections.ts` | Insert, list by recency, delete; URL stored without password or `sslmode` | todo |
+| I6 | Secrets with keyring backend check | `services/secrets.ts` | With `basic_text` or `unknown` mocked, remembering a password is refused; the check never runs before `ready` | todo |
+| I7 | Driver error mapping, including SSL errors | `services/errors.ts` | Each signal in the error table maps to its message | todo |
+| I8 | Main connection: SSL options built per mode (with `prefer` fallback), `search_path` pin, version check, `application_name`, serialized queries | `services/connection.ts`, `services/ssl.ts` | *DB*: against an SSL-enabled container, `require` connects, `verify-full` with the wrong CA fails, `prefer` falls back on a server without SSL; Postgres 13 is rejected; concurrent queries never interleave | todo |
+| I9 | Task connections and `runSingle` (`queryMode: 'extended'`) | `services/task-connection.ts`, `services/run-single.ts` | *DB*: a task connection's open transaction is invisible to the main connection; `SELECT 1; SELECT 2` through `runSingle` fails | todo |
+| I10 | Data directory with `PGSKETCH_DATA_DIR` override; single app instance | `main/paths.ts`, `main/index.ts` | E2E: two instances with different data directories run side by side; a second launch with the same one focuses the first and exits | todo |
+| I11 | Connection channels: `defaults`, `test`, `open`, `openSaved`, `close`, `recent`, `forget` | `main/ipc/connection.ts` | E2E: the renderer's `connection.test` reaches a container; `openSaved` works without the renderer ever receiving the password | todo |
 
 ### J. Connection screen
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| J1 | Typed renderer API client, screen switching, placeholder Editor screen | `renderer/api.ts`, `renderer/App.tsx`, `screens/Editor.tsx` | App shows Connect by default and can switch to the placeholder Editor |
-| J2 | Connect form: params, URL and socket modes, SSL mode with defaults, OS-username default for sockets, zod validation | `screens/Connect.tsx` | Component test: socket mode fills the OS username; a remote host defaults to `require` |
-| J3 | Submit, mapped error display, recent connections via `openSaved`, remember | `screens/Connect.tsx` | E2E: wrong password shows the message; success opens the Editor screen |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| J1 | Typed renderer API client, screen switching, placeholder Editor screen | `renderer/api.ts`, `renderer/App.tsx`, `screens/Editor.tsx` | App shows Connect by default and can switch to the placeholder Editor | todo |
+| J2 | Connect form: params, URL and socket modes, SSL mode with defaults, OS-username default for sockets, zod validation | `screens/Connect.tsx` | Component test: socket mode fills the OS username; a remote host defaults to `require` | todo |
+| J3 | Submit, mapped error display, recent connections via `openSaved`, remember | `screens/Connect.tsx` | E2E: wrong password shows the message; success opens the Editor screen | todo |
 
 ### K. Schema loading and editor state
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| K1 | Introspector service and `schema.load` channel | `services/introspector.ts`, `main/ipc/schema.ts` | E2E: the editor receives the fixture model, cast data and fingerprint |
-| K2 | Schema store core slice and table actions (add, remove, rename, restore) | `stores/schema/core.ts`, `stores/schema/tables.ts` | A new table starts with an `id bigint` identity PK; rename changes `desired` only; remove then restore leaves an empty diff |
-| K3 | Derived diff, risks, validation and status map | `stores/derived.ts`, `canvas/status.ts` | Renamed column has status `modified` with its old name |
-| K4 | Column actions with coupling rules: add, remove, rename, flags, type, default, comment | `stores/schema/columns.ts` | Turning PK on sets NN; NN can't be turned off while PK is on; identity rejects a default |
-| K5 | Constraint, index and FK actions, including self-references | `stores/schema/constraints.ts` | A self-referencing FK produces one `addConstraint` |
-| K6 | Schema actions: create schema; change schema of pending tables only | `stores/schema/schemas.ts` | Changing an existing table's schema is rejected by the action |
-| K7 | Cascade on column removal: constraints and indexes on the table that include the column, and FKs on other tables that reference it, are removed with it and restored with it | `stores/schema/columns.ts`, `stores/schema/constraints.ts` | Removing a column in a composite unique constraint, a multi-column check, and an FK from another table marks all three removed; restore brings all four back; the diff drops them before the column and generation isn't blocked. A column with a partial index can be removed (the index is listed as destructive); one used by a view or a read-only FK on another table can't |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| K1 | Introspector service and `schema.load` channel | `services/introspector.ts`, `main/ipc/schema.ts` | E2E: the editor receives the fixture model, cast data and fingerprint | todo |
+| K2 | Schema store core slice and table actions (add, remove, rename, restore) | `stores/schema/core.ts`, `stores/schema/tables.ts` | A new table starts with an `id bigint` identity PK; rename changes `desired` only; remove then restore leaves an empty diff | todo |
+| K3 | Derived diff, risks, validation and status map | `stores/derived.ts`, `canvas/status.ts` | Renamed column has status `modified` with its old name | todo |
+| K4 | Column actions with coupling rules: add, remove, rename, flags, type, default, comment | `stores/schema/columns.ts` | Turning PK on sets NN; NN can't be turned off while PK is on; identity rejects a default | todo |
+| K5 | Constraint, index and FK actions, including self-references | `stores/schema/constraints.ts` | A self-referencing FK produces one `addConstraint` | todo |
+| K6 | Schema actions: create schema; change schema of pending tables only | `stores/schema/schemas.ts` | Changing an existing table's schema is rejected by the action | todo |
+| K7 | Cascade on column removal: constraints and indexes on the table that include the column, and FKs on other tables that reference it, are removed with it and restored with it | `stores/schema/columns.ts`, `stores/schema/constraints.ts` | Removing a column in a composite unique constraint, a multi-column check, and an FK from another table marks all three removed; restore brings all four back; the diff drops them before the column and generation isn't blocked. A column with a partial index can be removed (the index is listed as destructive); one used by a view or a read-only FK on another table can't | todo |
 
 ### L. Canvas rendering
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| L1 | React Flow canvas fed by the union of baseline and desired | `canvas/Canvas.tsx`, `screens/Editor.tsx` | E2E: every fixture table appears as a node |
-| L2 | Static table node and column rows | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | Component test: badges, default chip and FK target render |
-| L3 | FK edges with crow's-foot markers, self-reference loops, per-column handles | `canvas/FkEdge.tsx`, `canvas/ColumnRow.tsx` | E2E: edge count equals FK count; a self-reference renders as a loop |
-| L4 | Auto-layout in a worker with per-column ports | `layout/elk.worker.ts`, `layout/autoLayout.ts` | Unit: ELK output maps to node positions; no overlapping nodes |
-| L5 | Layout repository and channels | `store/layouts.ts`, `main/ipc/layouts.ts`, `main/ipc/connection.ts` | Positions saved and read back per `dbKey`; rows for missing tables are pruned on load; forgetting a connection deletes its layouts |
-| L6 | Renderer layout store with debounced save and restore | `stores/layout.ts` | E2E: moved node keeps its position after restart |
-| L7 | Compact nodes below 70% zoom | `canvas/CompactNode.tsx`, `canvas/Canvas.tsx` | E2E: zooming out switches node type |
-| L8 | Status styling: added, modified, removed, error, read-only with reason | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | Component test: each status applies its style |
-| L9 | Schema filter, with stubs for FK edges to hidden tables | `chrome/SchemaFilter.tsx`, `canvas/Canvas.tsx` | E2E: hiding a schema hides its tables and stubs edges into it |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| L1 | React Flow canvas fed by the union of baseline and desired | `canvas/Canvas.tsx`, `screens/Editor.tsx` | E2E: every fixture table appears as a node | todo |
+| L2 | Static table node and column rows | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | Component test: badges, default chip and FK target render | todo |
+| L3 | FK edges with crow's-foot markers, self-reference loops, per-column handles | `canvas/FkEdge.tsx`, `canvas/ColumnRow.tsx` | E2E: edge count equals FK count; a self-reference renders as a loop | todo |
+| L4 | Auto-layout in a worker with per-column ports | `layout/elk.worker.ts`, `layout/autoLayout.ts` | Unit: ELK output maps to node positions; no overlapping nodes | todo |
+| L5 | Layout repository and channels | `store/layouts.ts`, `main/ipc/layouts.ts`, `main/ipc/connection.ts` | Positions saved and read back per `dbKey`; rows for missing tables are pruned on load; forgetting a connection deletes its layouts | todo |
+| L6 | Renderer layout store with debounced save and restore | `stores/layout.ts` | E2E: moved node keeps its position after restart | todo |
+| L7 | Compact nodes below 70% zoom | `canvas/CompactNode.tsx`, `canvas/Canvas.tsx` | E2E: zooming out switches node type | todo |
+| L8 | Status styling: added, modified, removed, error, read-only with reason | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | Component test: each status applies its style | todo |
+| L9 | Schema filter, with stubs for FK edges to hidden tables | `chrome/SchemaFilter.tsx`, `canvas/Canvas.tsx` | E2E: hiding a schema hides its tables and stubs edges into it | todo |
 
 ### M. Canvas editing
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| M1 | Inline text editing for table and column names | `editors/InlineText.tsx`, `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: rename a column; it turns amber and the change count updates |
-| M2 | Input safety: `nodrag nopan`, Delete/Backspace guarded | `editors/InlineText.tsx`, `canvas/Canvas.tsx` | E2E: selecting text doesn't move the node; Backspace doesn't delete it |
-| M3 | Badge toggles for PK, NN, UQ, with NN locked for PK and identity columns | `canvas/ColumnRow.tsx` | E2E: toggling NN produces `setNotNull`; toggling PK turns NN on and locks it |
-| M4 | Type picker popover with built-in types, existing enums, parameters, array toggle | `editors/TypePicker.tsx`, `canvas/ColumnRow.tsx` | Component test: choosing `varchar` shows a length input; an existing enum is listed |
-| M5 | Add and delete columns; Tab/Enter keyboard flow | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: create three columns using only the keyboard |
-| M6 | New table on double-click in the filtered schema; table toolbar | `canvas/Canvas.tsx`, `canvas/TableToolbar.tsx` | E2E: a new table appears at the cursor with its name focused |
-| M7 | Schema picker for pending tables, with "New schema…" | `editors/SchemaPicker.tsx`, `canvas/TableNode.tsx` | E2E: a pending table moves to a new schema; an existing table shows no picker |
-| M8 | Removed items struck through and restorable, including incoming FK edges of a deleted table | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx`, `canvas/FkEdge.tsx` | E2E: deleting a referenced table marks its incoming edges removed; restore brings both back |
-| M9 | Normalizer service on task connections and `expr.normalize` channel | `services/normalizer.ts`, `main/ipc/expr.ts` | *DB*: returns normalized text, a check's referenced columns, errors, and the TEMP fallback; requests reuse one connection, which closes after 30 s idle |
-| M10 | Expression input with live normalization | `editors/ExpressionInput.tsx` | Component test with mocked API shows errors inline; one request 400 ms after typing stops; cached results aren't requested again |
-| M11 | Default popover: presets per type, constant, custom; disabled on identity columns | `editors/DefaultPopover.tsx`, `canvas/ColumnRow.tsx` | E2E: choose `now()` on a `timestamptz` column; the chip can't be opened on an identity column |
-| M12 | FK by dragging between handles, including onto the same table; FK edge popover | `canvas/Canvas.tsx`, `editors/FkPopover.tsx` | E2E: drag creates an FK and a self-reference; changing `ON DELETE` yields drop + add |
-| M13 | Node footer with index editor | `canvas/NodeFooter.tsx`, `editors/IndexEditor.tsx` | E2E: add a composite unique index; it's named `t_a_b_idx` |
-| M14 | Check constraint editor | `editors/CheckEditor.tsx`, `canvas/NodeFooter.tsx` | E2E: invalid check expression shows the Postgres error; a two-column check is named `t_check`; in fallback mode the check editor is disabled with an explanation |
-| M15 | Table and column comments | `editors/CommentPopover.tsx`, `canvas/TableToolbar.tsx`, `canvas/ColumnRow.tsx` | E2E: a column comment yields `setComment` |
-| M16 | Read-only objects: lock icon with reason, no edit affordances; unmodeled-objects badge in the footer | `canvas/TableNode.tsx`, `canvas/NodeFooter.tsx` | E2E: a partial index, an exclusion constraint and a generated column can't be edited; a table with a view on it shows "1 view" with the name on hover |
-| M17 | Validation errors shown on nodes | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: an index named like a table shows a red outline and message |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| M1 | Inline text editing for table and column names | `editors/InlineText.tsx`, `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: rename a column; it turns amber and the change count updates | todo |
+| M2 | Input safety: `nodrag nopan`, Delete/Backspace guarded | `editors/InlineText.tsx`, `canvas/Canvas.tsx` | E2E: selecting text doesn't move the node; Backspace doesn't delete it | todo |
+| M3 | Badge toggles for PK, NN, UQ, with NN locked for PK and identity columns | `canvas/ColumnRow.tsx` | E2E: toggling NN produces `setNotNull`; toggling PK turns NN on and locks it | todo |
+| M4 | Type picker popover with built-in types, existing enums, parameters, array toggle | `editors/TypePicker.tsx`, `canvas/ColumnRow.tsx` | Component test: choosing `varchar` shows a length input; an existing enum is listed | todo |
+| M5 | Add and delete columns; Tab/Enter keyboard flow | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: create three columns using only the keyboard | todo |
+| M6 | New table on double-click in the filtered schema; table toolbar | `canvas/Canvas.tsx`, `canvas/TableToolbar.tsx` | E2E: a new table appears at the cursor with its name focused | todo |
+| M7 | Schema picker for pending tables, with "New schema…" | `editors/SchemaPicker.tsx`, `canvas/TableNode.tsx` | E2E: a pending table moves to a new schema; an existing table shows no picker | todo |
+| M8 | Removed items struck through and restorable, including incoming FK edges of a deleted table | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx`, `canvas/FkEdge.tsx` | E2E: deleting a referenced table marks its incoming edges removed; restore brings both back | todo |
+| M9 | Normalizer service on task connections and `expr.normalize` channel | `services/normalizer.ts`, `main/ipc/expr.ts` | *DB*: returns normalized text, a check's referenced columns, errors, and the TEMP fallback; requests reuse one connection, which closes after 30 s idle | todo |
+| M10 | Expression input with live normalization | `editors/ExpressionInput.tsx` | Component test with mocked API shows errors inline; one request 400 ms after typing stops; cached results aren't requested again | todo |
+| M11 | Default popover: presets per type, constant, custom; disabled on identity columns | `editors/DefaultPopover.tsx`, `canvas/ColumnRow.tsx` | E2E: choose `now()` on a `timestamptz` column; the chip can't be opened on an identity column | todo |
+| M12 | FK by dragging between handles, including onto the same table; FK edge popover | `canvas/Canvas.tsx`, `editors/FkPopover.tsx` | E2E: drag creates an FK and a self-reference; changing `ON DELETE` yields drop + add | todo |
+| M13 | Node footer with index editor | `canvas/NodeFooter.tsx`, `editors/IndexEditor.tsx` | E2E: add a composite unique index; it's named `t_a_b_idx` | todo |
+| M14 | Check constraint editor | `editors/CheckEditor.tsx`, `canvas/NodeFooter.tsx` | E2E: invalid check expression shows the Postgres error; a two-column check is named `t_check`; in fallback mode the check editor is disabled with an explanation | todo |
+| M15 | Table and column comments | `editors/CommentPopover.tsx`, `canvas/TableToolbar.tsx`, `canvas/ColumnRow.tsx` | E2E: a column comment yields `setComment` | todo |
+| M16 | Read-only objects: lock icon with reason, no edit affordances; unmodeled-objects badge in the footer | `canvas/TableNode.tsx`, `canvas/NodeFooter.tsx` | E2E: a partial index, an exclusion constraint and a generated column can't be edited; a table with a view on it shows "1 view" with the name on hover | todo |
+| M17 | Validation errors shown on nodes | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: an index named like a table shows a red outline and message | todo |
 
 ### N. Persistence and change detection
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| N1 | Drafts repository and channels | `store/drafts.ts`, `main/ipc/drafts.ts`, `main/ipc/connection.ts` | Save, read, clear by `dbKey`, including unsaved connections; forgetting a connection deletes its drafts |
-| N2 | Fingerprint poller on the main connection, comparing with the last-seen value; `schema.fingerprint` channel; `schema:changed` event | `services/poller.ts`, `main/ipc/schema.ts` | *DB*: an external `ALTER TABLE` emits one event within 5 s and no repeats; `ANALYZE` emits none |
-| N3 | Debounced draft saving; restore on session start only with matching fingerprint and existing IDs, otherwise discard with a notice | `stores/persistence.ts`, `screens/Editor.tsx` | E2E: edits survive a restart; a dump/restore of the database while closed never restores the stale draft |
-| N4 | `onSchemaChanged` handler: re-introspect, compare by name, adopt or mark stale; wired to the poller event and to session start (replacing N3's plain discard) | `stores/schema/core.ts`, `screens/Editor.tsx` | E2E: running the generated SQL externally shows "Changes applied" and clears the draft; applying half of it marks stale, applying the rest recovers; SQL applied while the app was closed shows "Changes applied" on the next start; an edit made during a slow re-introspect is kept and the session goes stale instead of adopting; an input left open during an external apply delays the adopt, and the typed text is preserved |
-| N5 | Layout remap on adopt: positions move to the new IDs of tables with the same qualified name | `stores/layout.ts`, `stores/schema/core.ts` | E2E: a newly created table keeps the position it had as a pending table after adopt |
-| N6 | Stale banner, reload with confirmation | `chrome/StaleBanner.tsx`, `stores/schema/core.ts` | E2E: an unrelated external change shows the banner; reload discards edits after confirming |
-| N7 | Lost-connection detection and banner | `services/connection.ts`, `chrome/StaleBanner.tsx` | E2E: stopping the container shows the reconnect banner |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| N1 | Drafts repository and channels | `store/drafts.ts`, `main/ipc/drafts.ts`, `main/ipc/connection.ts` | Save, read, clear by `dbKey`, including unsaved connections; forgetting a connection deletes its drafts | todo |
+| N2 | Fingerprint poller on the main connection, comparing with the last-seen value; `schema.fingerprint` channel; `schema:changed` event | `services/poller.ts`, `main/ipc/schema.ts` | *DB*: an external `ALTER TABLE` emits one event within 5 s and no repeats; `ANALYZE` emits none | todo |
+| N3 | Debounced draft saving; restore on session start only with matching fingerprint and existing IDs, otherwise discard with a notice | `stores/persistence.ts`, `screens/Editor.tsx` | E2E: edits survive a restart; a dump/restore of the database while closed never restores the stale draft | todo |
+| N4 | `onSchemaChanged` handler: re-introspect, compare by name, adopt or mark stale; wired to the poller event and to session start (replacing N3's plain discard) | `stores/schema/core.ts`, `screens/Editor.tsx` | E2E: running the generated SQL externally shows "Changes applied" and clears the draft; applying half of it marks stale, applying the rest recovers; SQL applied while the app was closed shows "Changes applied" on the next start; an edit made during a slow re-introspect is kept and the session goes stale instead of adopting; an input left open during an external apply delays the adopt, and the typed text is preserved | todo |
+| N5 | Layout remap on adopt: positions move to the new IDs of tables with the same qualified name | `stores/layout.ts`, `stores/schema/core.ts` | E2E: a newly created table keeps the position it had as a pending table after adopt | todo |
+| N6 | Stale banner, reload with confirmation | `chrome/StaleBanner.tsx`, `stores/schema/core.ts` | E2E: an unrelated external change shows the banner; reload discards edits after confirming | todo |
+| N7 | Lost-connection detection and banner | `services/connection.ts`, `chrome/StaleBanner.tsx` | E2E: stopping the container shows the reconnect banner | todo |
 
 ### O. SQL panel and validation
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| O1 | Top bar: database, schema filter slot, change and risk counts, buttons with disabled states | `chrome/TopBar.tsx`, `screens/Editor.tsx` | Generate SQL disabled with no changes or validation errors |
-| O2 | SQL panel: pre-check against `loadedFingerprint` (handler on mismatch, generation stops), fresh cast data via `schema.casts`, CodeMirror view | `sql/SqlPanel.tsx`, `sql/SqlView.tsx`, `main/ipc/schema.ts` | E2E: SQL appears; an unrelated external change blocks it; an applied migration is adopted instead; a failing handler leaves generation blocked |
-| O3 | Risk summary | `sql/RiskSummary.tsx` | Component test: counts and expandable lists |
-| O4 | Copy button | `sql/SqlPanel.tsx` | E2E: clipboard holds the SQL |
-| O5 | Save via native dialog, filename pattern, last folder | `services/files.ts`, `store/settings.ts`, `main/ipc/files.ts` | Unit: filename format; the second save opens in the first save's folder |
-| O6 | Validator on a task connection through `runSingle`; `sql.validate` channel | `services/validator.ts`, `main/ipc/sql.ts` | *DB*: `SET NOT NULL` on a column with nulls fails at the right statement; fingerprint unchanged after; the poller never reports a change during a run; an expression containing `; COMMIT;` can't end the transaction; a fingerprint change aborts the run; the dry run uses the original `search_path` |
-| O7 | Validate results and non-local host confirmation | `sql/ValidateResults.tsx`, `sql/SqlPanel.tsx` | E2E: results shown per statement; a non-local host asks first |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| O1 | Top bar: database, schema filter slot, change and risk counts, buttons with disabled states | `chrome/TopBar.tsx`, `screens/Editor.tsx` | Generate SQL disabled with no changes or validation errors | todo |
+| O2 | SQL panel: pre-check against `loadedFingerprint` (handler on mismatch, generation stops), fresh cast data via `schema.casts`, CodeMirror view | `sql/SqlPanel.tsx`, `sql/SqlView.tsx`, `main/ipc/schema.ts` | E2E: SQL appears; an unrelated external change blocks it; an applied migration is adopted instead; a failing handler leaves generation blocked | todo |
+| O3 | Risk summary | `sql/RiskSummary.tsx` | Component test: counts and expandable lists | todo |
+| O4 | Copy button | `sql/SqlPanel.tsx` | E2E: clipboard holds the SQL | todo |
+| O5 | Save via native dialog, filename pattern, last folder | `services/files.ts`, `store/settings.ts`, `main/ipc/files.ts` | Unit: filename format; the second save opens in the first save's folder | todo |
+| O6 | Validator on a task connection through `runSingle`; `sql.validate` channel | `services/validator.ts`, `main/ipc/sql.ts` | *DB*: `SET NOT NULL` on a column with nulls fails at the right statement; fingerprint unchanged after; the poller never reports a change during a run; an expression containing `; COMMIT;` can't end the transaction; a fingerprint change aborts the run; the dry run uses the original `search_path` | todo |
+| O7 | Validate results and non-local host confirmation | `sql/ValidateResults.tsx`, `sql/SqlPanel.tsx` | E2E: results shown per statement; a non-local host asks first | todo |
 
 ### P. Packaging and release
 
-| # | Phase | Files | Test |
-| --- | --- | --- | --- |
-| P1 | `.deb` config, icon and desktop entry | `electron-builder.yml` | The built `.deb` installs on a clean Debian-based system and launches |
-| P2 | CI packaging job with packaged-app smoke test | `ci.yml` | Packaged app opens the Connect screen and quits cleanly |
-| P3 | README: install, usage, screenshots, architecture | `README.md` | Reviewed against a fresh install |
-| P4 | Tag 0.1.0 and publish the GitHub Release | none | `.deb` downloadable from the release |
+| # | Phase | Files | Test | Status |
+| --- | --- | --- | --- | --- |
+| P1 | `.deb` config, icon and desktop entry | `electron-builder.yml` | The built `.deb` installs on a clean Debian-based system and launches | todo |
+| P2 | CI packaging job with packaged-app smoke test | `ci.yml` | Packaged app opens the Connect screen and quits cleanly | todo |
+| P3 | README: install, usage, screenshots, architecture | `README.md` | Reviewed against a fresh install | todo |
+| P4 | Tag 0.1.0 and publish the GitHub Release | none | `.deb` downloadable from the release | todo |
 
 ## Testing strategy
 
