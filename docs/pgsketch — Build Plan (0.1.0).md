@@ -690,9 +690,9 @@ The build is 121 thin phases in 16 milestones; each phase changes at most three 
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| D1 | Fingerprint query over selected definition columns plus OIDs | `fingerprint/fingerprint.ts` | *DB*: stable when nothing changes and after `INSERT`, `VACUUM`, `VACUUM FULL` and `ANALYZE`; changes after each kind of DDL and after dropping and recreating an identical table; editing a function body or a policy doesn't change it | todo |
-| D2 | Coverage guard against the database's real catalog table list | `fingerprint/fingerprint.ts` | Fails when an introspection query reads a catalog table the fingerprint doesn't cover; ignores functions like `pg_get_expr` | todo |
-| D3 | Assemble model, cast data and fingerprint in one snapshot | `introspect/index.ts` | *DB*: snapshot test of `fixtures/basic.sql`; fingerprint read in the same transaction | todo |
+| D1 | Fingerprint query over selected definition columns plus OIDs | `fingerprint/fingerprint.ts` | *DB*: stable when nothing changes and after `INSERT`, `VACUUM`, `VACUUM FULL` and `ANALYZE`; changes after each kind of DDL and after dropping and recreating an identical table; editing a function body or a policy doesn't change it | done |
+| D2 | Coverage guard against the database's real catalog table list | `fingerprint/fingerprint.ts` | Fails when an introspection query reads a catalog table the fingerprint doesn't cover; ignores functions like `pg_get_expr` | done |
+| D3 | Assemble model, cast data and fingerprint in one snapshot | `introspect/index.ts` | *DB*: snapshot test of `fixtures/basic.sql`; fingerprint read in the same transaction | done |
 
 ### E. Diff engine
 
