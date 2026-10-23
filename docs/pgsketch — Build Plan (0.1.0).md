@@ -700,11 +700,11 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| E1 | `ChangeOp` union type | `diff/ops.ts` | Typecheck | todo |
-| E2 | Schemas: create | `diff/schemas.ts` | A new schema yields `createSchema` | todo |
-| E3 | Tables: create, rename, drop; schema change on an existing table is a blocking error | `diff/tables.ts` | Renamed table keeps its ID and yields `renameTable`, not drop + create | todo |
-| E4 | Columns: add (including identity on new columns), drop, rename | `diff/columns.ts` | Same identity check for columns | todo |
-| E5 | Columns: type, NOT NULL, default changes | `diff/columns.ts` | One op per changed property | todo |
+| E1 | `ChangeOp` union type | `diff/ops.ts` | Typecheck | done |
+| E2 | Schemas: create | `diff/schemas.ts` | A new schema yields `createSchema` | done |
+| E3 | Tables: create, rename, drop; schema change on an existing table is a blocking error | `diff/tables.ts` | Renamed table keeps its ID and yields `renameTable`, not drop + create | done |
+| E4 | Columns: add (including identity on new columns), drop, rename | `diff/columns.ts` | Same identity check for columns | done |
+| E5 | Columns: type, NOT NULL, default changes | `diff/columns.ts` | One op per changed property | done |
 | E6 | Constraints: add, drop, rename; changed = drop + add; self-referencing FKs | `diff/constraints.ts` | Changed FK action yields drop + add; renamed constraint yields `renameConstraint` | todo |
 | E7 | Indexes: same rules as constraints | `diff/indexes.ts` | Column order change yields drop + add; rename yields `renameIndex` | todo |
 | E8 | Comments on tables and columns | `diff/comments.ts` | Set, change, clear | todo |
