@@ -669,7 +669,7 @@ The build is 121 thin phases in 16 milestones; each phase changes at most three 
 | B4 | Parse `format_type` output into `PgType`; render `PgType` back to SQL | `sql/pgtype.ts` | Table-driven: `varchar(255)`, `numeric(10,2)`, `timestamptz`, `text[]`, schema-qualified enum | done |
 | B5 | Validation: empty and over-63-byte names; Postgres namespaces (relations per schema, constraints per table, PK/unique names as index names) | `model/validate.ts` | An index named like a table fails; two tables with the same check name pass | done |
 | B6 | Validation: one PK per table, existing referenced columns, PK and identity coupling, FK targets (PK, unique constraint, or qualifying unique index; self-references allowed), type parameters, pending table schema exists | `model/validate.ts` | FK onto a partial unique index fails; an index on a removed column fails; a nullable PK column fails | done |
-| B7 | Naming: port of `makeObjectName`, numbered collision handling, and the `assignNames` pass over auto-named objects | `model/naming.ts` | *DB*: unnamed PK, unique, FK, one- and multi-column checks and indexes created in a container, including very long names and collisions, get the same names as ours; renaming a pending table renames its auto-named constraints while a user-named one stays | todo |
+| B7 | Naming: port of `makeObjectName`, numbered collision handling, and the `assignNames` pass over auto-named objects | `model/naming.ts` | *DB*: unnamed PK, unique, FK, one- and multi-column checks and indexes created in a container, including very long names and collisions, get the same names as ours; renaming a pending table renames its auto-named constraints while a user-named one stays | done |
 
 ### C. Introspection
 
