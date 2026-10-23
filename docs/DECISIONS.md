@@ -145,3 +145,67 @@ Objects are named in the order schema name, table name, kind (PK, unique, FK, ch
 `model/utf8.ts` holds `utf8Length` and `clipUtf8`, used by both name validation and naming.
 
 **Rationale:** both need Postgres's 63-byte limit counted in bytes, and one copy avoids drift.
+
+## Introspection functions take a `Query`, and the snapshot is a helper around it
+
+**Date & time:** 2026-10-24 (C1, uncommitted)
+
+Every introspection function is `introspectX(query)`. `Query` is `(sql, params?) => Promise<Row[]>` with params limited to strings, numbers, booleans and null. `withSnapshot(query, fn)` wraps a run in `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY` plus `SET LOCAL search_path = ''`, then commits, or rolls back and rethrows. The caller must give it a connection nothing else uses.
+
+**Rationale:** core stays driver-free, and the empty search path makes `pg_get_expr` and `format_type` return schema-qualified text that matches across connections.
+
+## Extension-owned objects are excluded in SQL, not after the fact
+
+**Date & time:** 2026-10-24 (C2, uncommitted)
+
+`notExtensionOwned(catalog, oidExpr)` is a SQL condition used by the schema, table, enum and unmodeled-object queries. `listExtensionOwned` is the same data as a list, for tests and diagnostics.
+
+**Rationale:** one rule applied where the rows are read, with no separate filtering pass to forget.
+
+## Everything on a read-only table is read-only
+
+**Date & time:** 2026-10-24 (C4/C5/C6/C7, uncommitted)
+
+A partitioned table or a partition makes its columns, constraints and indexes read-only too, with the table's reason (`partitioned-table` or `partition`). If a table is both, `partition` wins.
+
+**Rationale:** the plan only marks the table, but nothing on a partition can be changed safely, and doing it once in introspection means the editor and the diff don't need to remember.
+
+## Two more read-only reasons, and a few classification choices
+
+**Date & time:** 2026-10-24 (C5/C6/C7, uncommitted)
+
+Added `unsupported-type` (a column whose type has non-integer modifiers; its type is kept as the raw text) and `fk-set-columns` (Postgres 15+ `ON DELETE SET NULL (cols)`). A unique or primary key constraint is read-only for the same reasons as its backing index: INCLUDE columns, a non-default operator class, storage options or tablespace, NULLS NOT DISTINCT. Any non-default sort order (DESC, or NULLS FIRST/LAST) is `desc-index`. `NO INHERIT` only counts for check constraints, because Postgres marks every other constraint non-inheritable. Columns added in Postgres 15 and later are read through `to_jsonb(row) ->> 'column'`, which returns NULL on 14.
+
+**Rationale:** the plan's rule is "any attribute pgsketch doesn't model makes an object read-only"; these are the attributes it doesn't model. Each was checked against a real Postgres.
+
+## Index columns include everything the index touches when it is read-only
+
+**Date & time:** 2026-10-24 (C7, uncommitted)
+
+An editable index lists its key columns in order. A read-only one also lists the columns inside its expressions and predicate and its INCLUDE columns, so removing any of those columns is blocked.
+
+**Rationale:** the diff's read-only guard needs to know every column an index depends on.
+
+## Unmodeled objects link to what they read directly
+
+**Date & time:** 2026-10-24 (C9, uncommitted)
+
+Each view, materialized view, foreign table, sequence, trigger, function and policy records the tables and columns it depends on directly. A view on another view has no links of its own, because the view it reads already blocks the change. All sequences are kept, including those behind identity and serial columns, because their names are taken in the schema.
+
+**Rationale:** enough for the guard and for name collisions, without walking dependency chains.
+
+## Cast data is keyed by model type names
+
+**Date & time:** 2026-10-24 (C10, uncommitted)
+
+`CastData` holds type categories, domain base types and all of `pg_cast`, keyed by the same names `parsePgType` produces (`integer`, `varchar`, `public.mood`). `needsUsing` treats anything, arrays included, converting to a string type as not needing `USING`; an array never converts to a non-array otherwise; arrays follow their element types and domains their base type. The DB test compares it with Postgres for all 900 pairs of 30 types, using `ALTER COLUMN TYPE` on an empty table and an `INSERT ... SELECT`, which always agree.
+
+**Rationale:** the first version missed that arrays convert to strings; the matrix found it. Types outside the matrix (ranges, geometric types) are only as accurate as `pg_cast`.
+
+## Known gaps
+
+**Date & time:** 2026-10-24 (C-phases, uncommitted)
+
+A foreign key from a user table to an extension-owned table is returned with a reference to a table that is not in the model, which validation would report as missing. A table's own collation, `UNLOGGED`, and storage settings are not modeled and are not flagged. The Node driver does not parse arrays of the `name` type, so queries cast such columns to `text`.
+
+**Rationale:** none of these showed up in the planned tests; noted so a later phase can decide.
