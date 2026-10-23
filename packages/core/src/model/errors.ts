@@ -14,7 +14,11 @@ export type ValidationCode =
   | 'fk-column-count'
   | 'fk-no-target'
   | 'fk-type-mismatch'
-  | 'invalid-type-params';
+  | 'invalid-type-params'
+  // found while diffing: edits the editor should never produce
+  | 'schema-changed'
+  | 'table-schema-changed'
+  | 'column-identity-changed';
 
 /** `objectId` is the object the error is shown on. */
 export interface ValidationError {
