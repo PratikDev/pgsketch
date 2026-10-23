@@ -1,10 +1,13 @@
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { Client } from 'pg';
+import type { Query } from '../src/introspect/query';
 
 export interface TestPostgres {
   /** Major version under test, from `PG_VERSION` (default 16). */
   version: string;
   client: Client;
+  /** The same connection as `client`, in the shape core's introspection expects. */
+  query: Query;
   connectionUri: string;
   stop: () => Promise<void>;
 }
@@ -20,6 +23,8 @@ export async function startPostgres(): Promise<TestPostgres> {
   return {
     version,
     client,
+    query: async (sql, params) =>
+      (await client.query(sql, params ? [...params] : undefined)).rows,
     connectionUri,
     stop: async () => {
       await client.end();
