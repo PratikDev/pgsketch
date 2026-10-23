@@ -73,3 +73,12 @@ export function renderPgType(type: PgType): string {
   const params = type.params?.length ? `(${type.params.join(',')})` : '';
   return `${name}${params}${type.isArray ? '[]' : ''}`;
 }
+
+export function samePgType(a: PgType, b: PgType): boolean {
+  return (
+    a.name === b.name &&
+    a.schema === b.schema &&
+    a.isArray === b.isArray &&
+    (a.params ?? []).join(',') === (b.params ?? []).join(',')
+  );
+}
