@@ -209,3 +209,27 @@ Each view, materialized view, foreign table, sequence, trigger, function and pol
 A foreign key from a user table to an extension-owned table is returned with a reference to a table that is not in the model, which validation would report as missing. A table's own collation, `UNLOGGED`, and storage settings are not modeled and are not flagged. The Node driver does not parse arrays of the `name` type, so queries cast such columns to `text`.
 
 **Rationale:** none of these showed up in the planned tests; noted so a later phase can decide.
+
+## The fingerprint hashes the introspection queries' own inputs
+
+**Date & time:** 2026-10-24 (D1, uncommitted)
+
+`FINGERPRINT_SQL` is one statement made of one md5 per kind of object, each over rows rendered with `format('%L|...')` and sorted. It reuses the introspection building blocks (the user-schema, user-table and extension filters, the index read-only reason, and the unmodeled-object and dependency SQL) instead of restating them. It hashes OIDs and definition text (names, types, flags, defaults, constraint and index definitions, comments, enum labels), never statistics. Unmodeled objects contribute only OID, name, kind and dependencies. `ENABLE ROW LEVEL SECURITY` does not change it, because the flag itself is not read, only the policies.
+
+**Rationale:** the fingerprint covers exactly what introspection reads by construction, so the two can only drift if a query is added without being added here, which D2 checks. It must be run on a connection with an empty `search_path`, like introspection, so definition text matches.
+
+## The coverage guard captures the SQL that introspection really runs
+
+**Date & time:** 2026-10-24 (D2, uncommitted)
+
+Instead of scanning exported SQL constants, the test runs `introspectModel` with a spying `Query` that records every statement, then looks for the database's own catalog table names in that text and in the fingerprint SQL. The helpers are `catalogsRead` and `uncoveredCatalogs` in `fingerprint.ts`. Cast data is outside `introspectModel`, so it is excluded by construction, and a test asserts the fingerprint does not mention `pg_cast`.
+
+**Rationale:** scanning what actually executes can't miss a query built from fragments, and matching real catalog names ignores functions like `pg_get_expr`.
+
+## `introspect` is a snapshot around three reads
+
+**Date & time:** 2026-10-24 (D3, uncommitted)
+
+`introspectModel(query)` runs the seven model queries one after another. `introspect(query)` runs it, then the cast queries, then the fingerprint, all inside one `withSnapshot`, and returns `{ model, casts, fingerprint }`. The fixture `basic.sql` is checked by a snapshot of the model with ids replaced by names (`describeModel`), which is identical on Postgres 14, 16 and 18.
+
+**Rationale:** the fingerprint must describe exactly the schema that was loaded; a test creates a table from another connection mid-introspection and checks it appears in neither the model nor the fingerprint.
