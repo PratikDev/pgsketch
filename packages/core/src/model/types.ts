@@ -8,6 +8,7 @@ export type ReadOnlyReason =
   // columns
   | 'generated-column'
   | 'nextval-default'
+  | 'unsupported-type'
   | 'not-null-not-valid'
   | 'not-null-no-inherit'
   // constraints
@@ -15,6 +16,7 @@ export type ReadOnlyReason =
   | 'not-valid'
   | 'no-inherit'
   | 'match-full'
+  | 'fk-set-columns'
   | 'exclusion'
   // indexes
   | 'partial-index'
