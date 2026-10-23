@@ -675,16 +675,16 @@ The build is 121 thin phases in 16 milestones; each phase changes at most three 
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| C1 | `Query` type and read-only `REPEATABLE READ` snapshot helper with `search_path = ''` | `introspect/query.ts` | *DB*: queries inside report `repeatable read`, reject writes, and return fully qualified expressions | todo |
-| C2 | Extension-owned object detection via `pg_depend` | `introspect/extensions.ts` | *DB*: after `CREATE EXTENSION pg_trgm`, its objects are listed | todo |
-| C3 | Schemas query | `introspect/schemas.ts` | *DB*: user schemas returned, system schemas excluded | todo |
-| C4 | Tables query, comments; partitioned tables and partitions read-only | `introspect/tables.ts` | *DB*: a partition child is marked read-only | todo |
-| C5 | Columns query: types, NOT NULL, raw defaults, identity kind, generated flag, comments | `introspect/columns.ts` | *DB*: a generated column is read-only; identity `ALWAYS` and `BY DEFAULT` are distinguished | todo |
-| C6 | Constraints query: PK, unique, check with `conkey` columns, FK (actions, match type), deferrable, validated, no-inherit; exclusion as `kind: 'exclusion'`; `contype 'n'` excluded | `introspect/constraints.ts` | *DB*: on Postgres 18, NOT NULL columns produce no constraint objects; a multi-column check lists both columns; a `NOT VALID` FK is read-only | todo |
-| C7 | Indexes query with full read-only classification; constraint-backed indexes folded | `introspect/indexes.ts` | *DB*: plain unique index editable; partial, expression, GIN, `DESC`, `INCLUDE` and `NULLS NOT DISTINCT` indexes read-only | todo |
-| C8 | Enums query with ordered labels (read-only) | `introspect/enums.ts` | *DB*: labels returned in `enumsortorder` | todo |
-| C9 | Unmodeled objects and dependencies: views, materialized views, foreign tables, sequences, triggers, functions, policies | `introspect/unmodeled.ts` | *DB*: a view depending on a column is linked to that column | todo |
-| C10 | Cast data (all of `pg_cast`, type categories) and coercion rules | `introspect/casts.ts`, `sql/coercion.ts` | *DB*: for a matrix of type pairs (integers, numerics, text, varchar lengths, enum, arrays, domain), our "needs `USING`" answer matches whether an `INSERT` of the old type into the new type succeeds, on Postgres 14–18 | todo |
+| C1 | `Query` type and read-only `REPEATABLE READ` snapshot helper with `search_path = ''` | `introspect/query.ts` | *DB*: queries inside report `repeatable read`, reject writes, and return fully qualified expressions | done |
+| C2 | Extension-owned object detection via `pg_depend` | `introspect/extensions.ts` | *DB*: after `CREATE EXTENSION pg_trgm`, its objects are listed | done |
+| C3 | Schemas query | `introspect/schemas.ts` | *DB*: user schemas returned, system schemas excluded | done |
+| C4 | Tables query, comments; partitioned tables and partitions read-only | `introspect/tables.ts` | *DB*: a partition child is marked read-only | done |
+| C5 | Columns query: types, NOT NULL, raw defaults, identity kind, generated flag, comments | `introspect/columns.ts` | *DB*: a generated column is read-only; identity `ALWAYS` and `BY DEFAULT` are distinguished | done |
+| C6 | Constraints query: PK, unique, check with `conkey` columns, FK (actions, match type), deferrable, validated, no-inherit; exclusion as `kind: 'exclusion'`; `contype 'n'` excluded | `introspect/constraints.ts` | *DB*: on Postgres 18, NOT NULL columns produce no constraint objects; a multi-column check lists both columns; a `NOT VALID` FK is read-only | done |
+| C7 | Indexes query with full read-only classification; constraint-backed indexes folded | `introspect/indexes.ts` | *DB*: plain unique index editable; partial, expression, GIN, `DESC`, `INCLUDE` and `NULLS NOT DISTINCT` indexes read-only | done |
+| C8 | Enums query with ordered labels (read-only) | `introspect/enums.ts` | *DB*: labels returned in `enumsortorder` | done |
+| C9 | Unmodeled objects and dependencies: views, materialized views, foreign tables, sequences, triggers, functions, policies | `introspect/unmodeled.ts` | *DB*: a view depending on a column is linked to that column | done |
+| C10 | Cast data (all of `pg_cast`, type categories) and coercion rules | `introspect/casts.ts`, `sql/coercion.ts` | *DB*: for a matrix of type pairs (integers, numerics, text, varchar lengths, enum, arrays, domain), our "needs `USING`" answer matches whether an `INSERT` of the old type into the new type succeeds, on Postgres 14–18 | done |
 
 ### D. Fingerprint
 
