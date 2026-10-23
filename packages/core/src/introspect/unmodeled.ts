@@ -64,7 +64,7 @@ export function toUnmodeled(
   });
 }
 
-const OBJECTS_SQL = `
+export const OBJECTS_SQL = `
   SELECT CASE c.relkind WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized-view'
                         WHEN 'f' THEN 'foreign-table' ELSE 'sequence' END AS kind,
          'pg_class' AS catalog, c.oid, c.relnamespace AS schema_oid, c.relname AS name,
@@ -86,7 +86,7 @@ const OBJECTS_SQL = `
   ORDER BY 1, 4, 5`;
 
 // A view depends on tables through its rewrite rule; everything else depends on them directly.
-const DEPENDENCIES_SQL = `
+export const DEPENDENCIES_SQL = `
   SELECT cl.relname AS catalog, d.objid AS oid, d.refobjid AS table_oid, d.refobjsubid AS attnum
     FROM pg_depend d
     JOIN pg_class cl ON cl.oid = d.classid
