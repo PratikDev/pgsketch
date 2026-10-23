@@ -1,0 +1,24 @@
+import type { Id } from './types';
+
+export type ValidationCode =
+  | 'name-empty'
+  | 'name-too-long'
+  | 'name-duplicate'
+  | 'missing-schema'
+  | 'missing-column'
+  | 'missing-ref-table'
+  | 'multiple-primary-keys'
+  | 'pk-nullable'
+  | 'identity-nullable'
+  | 'identity-default'
+  | 'fk-column-count'
+  | 'fk-no-target'
+  | 'fk-type-mismatch'
+  | 'invalid-type-params';
+
+/** `objectId` is the object the error is shown on. */
+export interface ValidationError {
+  code: ValidationCode;
+  objectId: Id;
+  message: string;
+}
