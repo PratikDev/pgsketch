@@ -233,3 +233,27 @@ Instead of scanning exported SQL constants, the test runs `introspectModel` with
 `introspectModel(query)` runs the seven model queries one after another. `introspect(query)` runs it, then the cast queries, then the fingerprint, all inside one `withSnapshot`, and returns `{ model, casts, fingerprint }`. The fixture `basic.sql` is checked by a snapshot of the model with ids replaced by names (`describeModel`), which is identical on Postgres 14, 16 and 18.
 
 **Rationale:** the fingerprint must describe exactly the schema that was loaded; a test creates a table from another connection mid-introspection and checks it appears in neither the model nor the fingerprint.
+
+## Each part of the diff returns operations and blocking errors together
+
+**Date & time:** 2026-10-24 (E1–E5, uncommitted)
+
+The plan writes `diff(baseline, desired): ChangeOp[]`. Each part (`diffSchemas`, `diffTables`, `diffColumns`, ...) returns a `DiffPart`, `{ ops, errors }`, and the final `diff` will concatenate the parts. Errors use the existing `ValidationError` type, so the editor shows them the same way as validation errors.
+
+**Rationale:** the plan also needs the diff to report "blocking errors" (a table moved to another schema, a column a view depends on), and returning them next to the operations avoids a second pass.
+
+## Edits the editor can't produce block generation instead of being ignored
+
+**Date & time:** 2026-10-24 (E2/E3/E5, uncommitted)
+
+Besides the plan's table-schema case, the diff reports a blocking error when an existing schema is renamed or removed (`schema-changed`) and when an existing column's identity is turned on, off or switched (`column-identity-changed`). None of these has an operation in 0.1.0.
+
+**Rationale:** these are bugs if they ever happen, and a migration that silently leaves out a visible change is the worst failure the plan lists.
+
+## Column change operations follow the order they run in
+
+**Date & time:** 2026-10-24 (E4/E5, uncommitted)
+
+A column that changes in several ways gets one operation per change: rename, type, default, nullability. A default counts as changed only when its SQL text changes, so a preset and a typed-in expression with the same text are the same default. Types are compared structurally, including length, precision and array-ness (`samePgType`). A new table's `createTable` carries its columns in table order and its primary key only; other constraints and indexes are separate operations.
+
+**Rationale:** matches the operation phases in the plan (alter columns: type, defaults, nullability), and keeps the diff from reporting changes Postgres would not see.
