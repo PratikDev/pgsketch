@@ -1,1 +1,1 @@
-export const coreName = '@pgsketch/core';
+export type * from './model/types';

@@ -657,13 +657,13 @@ The build is 121 thin phases in 16 milestones; each phase changes at most three 
 | A6 | End-to-end testing: Playwright `_electron` | `apps/desktop/playwright.config.ts` | An E2E spec launches the app and reads the window title | done |
 | A7 | CI: install, lint, typecheck, unit and component tests | `.github/workflows/ci.yml` | A push produces a green run | done |
 | A8 | Postgres test helper with Testcontainers, version from `PG_VERSION` env (default 16) | `core/test/pg.ts` | *DB*: `SELECT version()` returns the expected major version | done |
-| A9 | CI matrix for Postgres 14–18 on DB tests, plus the E2E job | `ci.yml` | Five green DB jobs and a green E2E job | working |
+| A9 | CI matrix for Postgres 14–18 on DB tests, plus the E2E job | `ci.yml` | Five green DB jobs and a green E2E job | done |
 
 ### B. Core model and SQL primitives
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| B1 | All schema model interfaces: `readOnly` reasons, identity kind, `exclusion` constraint kind, `unmodeled` map | `model/types.ts` | A fixture model typechecks | todo |
+| B1 | All schema model interfaces: `readOnly` reasons, identity kind, `exclusion` constraint kind, `unmodeled` map | `model/types.ts` | A fixture model typechecks | done |
 | B2 | ID helpers: OID-based IDs and `newId()` | `model/ids.ts` | Same OIDs give same IDs; new IDs are unique | todo |
 | B3 | `quoteIdent`, `quoteLiteral`, `qualified(schema, name)` | `sql/quote.ts` | Embedded quotes, mixed case, reserved words, unicode, empty strings | todo |
 | B4 | Parse `format_type` output into `PgType`; render `PgType` back to SQL | `sql/pgtype.ts` | Table-driven: `varchar(255)`, `numeric(10,2)`, `timestamptz`, `text[]`, schema-qualified enum | todo |
