@@ -664,8 +664,8 @@ The build is 121 thin phases in 16 milestones; each phase changes at most three 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
 | B1 | All schema model interfaces: `readOnly` reasons, identity kind, `exclusion` constraint kind, `unmodeled` map | `model/types.ts` | A fixture model typechecks | done |
-| B2 | ID helpers: OID-based IDs and `newId()` | `model/ids.ts` | Same OIDs give same IDs; new IDs are unique | todo |
-| B3 | `quoteIdent`, `quoteLiteral`, `qualified(schema, name)` | `sql/quote.ts` | Embedded quotes, mixed case, reserved words, unicode, empty strings | todo |
+| B2 | ID helpers: OID-based IDs and `newId()` | `model/ids.ts` | Same OIDs give same IDs; new IDs are unique | done |
+| B3 | `quoteIdent`, `quoteLiteral`, `qualified(schema, name)` | `sql/quote.ts` | Embedded quotes, mixed case, reserved words, unicode, empty strings | done |
 | B4 | Parse `format_type` output into `PgType`; render `PgType` back to SQL | `sql/pgtype.ts` | Table-driven: `varchar(255)`, `numeric(10,2)`, `timestamptz`, `text[]`, schema-qualified enum | todo |
 | B5 | Validation: empty and over-63-byte names; Postgres namespaces (relations per schema, constraints per table, PK/unique names as index names) | `model/validate.ts` | An index named like a table fails; two tables with the same check name pass | todo |
 | B6 | Validation: one PK per table, existing referenced columns, PK and identity coupling, FK targets (PK, unique constraint, or qualifying unique index; self-references allowed), type parameters, pending table schema exists | `model/validate.ts` | FK onto a partial unique index fails; an index on a removed column fails; a nullable PK column fails | todo |
