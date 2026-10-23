@@ -650,7 +650,7 @@ The build is 121 thin phases in 16 milestones; each phase changes at most three 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
 | A1 | Initialize the pnpm monorepo, strict base TS config, ESLint, Prettier | *generated* (`package.json`, `pnpm-workspace.yaml`, `tsconfig.base.json`, lint configs) | `pnpm install` and `pnpm lint` succeed | done |
-| A2 | Scaffold `packages/core` with Vitest | *generated* (package config, `src/index.ts`, `vitest.config.ts`) | A placeholder Vitest test passes | todo |
+| A2 | Scaffold `packages/core` with Vitest | *generated* (package config, `src/index.ts`, `vitest.config.ts`) | A placeholder Vitest test passes | done |
 | A3 | Scaffold `apps/desktop` with the electron-vite React TS template | *generated* | `pnpm dev` opens a window | todo |
 | A4 | Add Tailwind and initialize shadcn/ui in the renderer | *generated* | A shadcn `Button` renders with Tailwind styles | todo |
 | A5 | Component testing: Vitest with jsdom and React Testing Library in the desktop app | `apps/desktop/vitest.config.ts`, `renderer/test-setup.ts` | A component test renders the placeholder App | todo |
