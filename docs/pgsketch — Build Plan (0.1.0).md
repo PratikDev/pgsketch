@@ -43,36 +43,37 @@ Every decision below is settled for 0.1.0; the rest of this plan builds on them.
 | Interface | GUI only, no CLI. Single app instance, one database per window |
 | Connection | Optimistic: try to connect with what the user entered and turn failures into clear messages. Supports host/port, connection string, and the local Unix socket (peer auth, user defaulting to the OS username) |
 | SSL | Mode selector with libpq meanings, built into explicit `pg` options and never passed through as `sslmode`: `disable`; `prefer` (try SSL, fall back to plaintext); `require` (encrypted, server not verified); `verify-full` (CA file and hostname verified). Defaults to `disable` for local hosts and sockets, `require` otherwise. A pasted connection string's `sslmode` fills the selector and is then stripped; the selector is the only source of truth |
-| Saved connections | Opened by ID in the main process; passwords never reach the renderer |
-| `search_path` | Pinned to `''` on every connection, so introspected and normalized expressions are always fully qualified and identical across connections |
+| Saved connections | Opened by ID in the main process; passwords never reach the renderer. Forgetting a connection also deletes its drafts and layouts |
+| `search_path` | Pinned to `''` on every connection whenever definitions are read, so introspected and normalized expressions are always fully qualified and identical across connections. Normalization parses user-typed expressions with the connection's original `search_path`, so unqualified names like `uuid_generate_v4()` resolve, then reads them back qualified |
 | Source of truth | The live database. No project files |
 | Postgres versions | 14 and newer. Postgres 18's `contype 'n'` NOT NULL rows in `pg_constraint` are handled explicitly |
 | Schemas | All non-system schemas, never assuming `public`, with a schema filter on the canvas |
 | Schema editing | Create new schemas only. A table's schema can change only while the table is a pending create; existing tables keep theirs. Renaming or dropping existing schemas and moving existing tables wait for 0.2 |
 | Editable objects | Tables, columns, types, defaults, NOT NULL, primary keys, foreign keys (with `ON DELETE`/`ON UPDATE`, including self-references), unique and check constraints, plain B-tree indexes (single and composite), comments |
 | Enums | Existing enums are read and usable as column types. Creating and editing enums waits for 0.2 |
-| Identity | New primary keys are `bigint GENERATED ALWAYS AS IDENTITY`. `ALWAYS` vs `BY DEFAULT` is preserved on existing columns. Turning identity on or off for existing columns waits for 0.2 |
+| Identity | New tables start with an `id bigint GENERATED ALWAYS AS IDENTITY` primary key column. Toggling PK on any other column never changes its type or adds identity. `ALWAYS` vs `BY DEFAULT` is preserved on existing columns. Turning identity on or off for existing columns waits for 0.2 |
 | Coupling rules | Turning PK on also turns NOT NULL on and locks it; turning PK off leaves NOT NULL on. Identity columns are always NOT NULL and can't have a default |
-| Column removal | Removing a column also removes every constraint and index on its table that includes it, shown as removed and restored together. Foreign keys pointing at it are dropped too |
-| Read-only rule | Any object with an attribute pgsketch doesn't model is read-only: shown, preserved, never dropped. This covers partial, expression and non-B-tree indexes; DESC, INCLUDE, opclasses, storage options and `NULLS NOT DISTINCT` on indexes; deferrable, `NOT VALID`, `NO INHERIT` and `MATCH FULL` constraints; exclusion constraints; generated columns; `nextval(…)` defaults; partitioned tables and partitions. Objects of unmodeled kinds (views, materialized views, foreign tables, sequences, triggers, functions, policies) are kept in a separate `unmodeled` map |
+| Column removal | Removing a column also removes every constraint and index on its table that includes it, and every foreign key on other tables that references it. All are shown as removed and restored together. Read-only ones on the same table are included and listed as destructive; read-only dependents elsewhere block the removal. Table deletion follows the same rule |
+| Read-only rule | Any object with an attribute pgsketch doesn't model is read-only: shown and preserved, never modified or recreated. It's dropped only as a visible consequence of deleting its own table or column, and then listed by name as destructive. If a read-only object elsewhere depends on what's being removed (a view, materialized view, policy, or read-only FK on another table), the removal is blocked. This covers partial, expression and non-B-tree indexes; DESC, INCLUDE, opclasses, storage options and `NULLS NOT DISTINCT` on indexes; deferrable, `NOT VALID`, `NO INHERIT` and `MATCH FULL` constraints; exclusion constraints; generated columns; `nextval(…)` defaults; partitioned tables and partitions. Objects of unmodeled kinds (views, materialized views, foreign tables, sequences, triggers, functions, policies) are kept in a separate `unmodeled` map |
 | `serial` | Not created. Existing ones are preserved through the read-only rule |
 | Editing | Directly on the canvas: inline cells, badges, anchored popovers, drag-to-relate. No side panel. No column reordering, since Postgres can't reorder existing columns |
 | SQL in the UI | Only for custom default expressions and check constraints |
-| Naming | New constraints and indexes use a port of Postgres's own algorithm: `t_pkey`, `t_a_b_key` (unique constraint), `t_a_b_fkey`, `t_a_check` (one column) or `t_check` (several), `t_a_b_idx` (index). Table and column parts are shortened separately to fit 63 bytes; collisions get a number (`t_a_key1`). Renaming a table leaves existing constraint and index names unchanged |
+| Naming | New constraints and indexes use a port of Postgres's own algorithm: `t_pkey`, `t_a_b_key` (unique constraint), `t_a_b_fkey`, `t_a_check` (one column) or `t_check` (several), `t_a_b_idx` (index). Table and column parts are shortened separately to fit 63 bytes; collisions get a number (`t_a_key1`). Names of objects created in the editor are marked auto-generated and recomputed by a pure `assignNames` pass on every edit, so renaming a pending table or column renames its pending constraints and indexes too; naming one yourself fixes its name. Existing objects' names never change, including when their table is renamed |
 | Change model | Diff between the loaded schema (baseline) and the edited schema (desired). Original names tracked by stable IDs so renames are exact |
 | Undo/redo | Not in 0.1.0. Removed items stay visible and restorable until reload or until the change is adopted |
 | Deleting a referenced table | Incoming foreign keys are shown as removed immediately; restoring the table restores them |
-| Change detection | Schema fingerprint (definitions plus OIDs) polled every 5 s and on window focus against the last-seen value, taken inside the introspection snapshot. Every detected change, the Generate/Validate pre-check, and session start all run one handler: re-introspect, adopt (with "changes applied" and layout positions carried over by name) if the database matches the edits by qualified name, otherwise mark stale and block SQL generation and Validate |
+| Change detection | Schema fingerprint (definitions plus OIDs) polled every 5 s and on window focus against the last-seen value (used only to avoid duplicate notifications), taken inside the introspection snapshot. The Generate/Validate pre-check compares with the baseline's `loadedFingerprint` instead, and a failed handler marks the session stale. Every detected change, the Generate/Validate pre-check, and session start all run one handler: re-introspect, adopt (with "changes applied" and layout positions carried over by name) if the database matches the edits by qualified name, otherwise mark stale and block SQL generation and Validate. The handler decides and adopts in one synchronous step after the load returns, guarded by a version counter on `desired`, and waits while an inline editor is open, so edits made while it runs are never overwritten |
 | Reload with unsaved edits | Discards the edits (after confirmation) |
 | Unsaved edits across restarts | Kept if the fingerprint is unchanged and every OID-based ID in the draft still exists; otherwise the change handler decides between "changes applied" and discard |
 | Output | Up-only plain SQL, wrapped in `BEGIN; … COMMIT;`. Deterministic: the timestamp and database name in the header are passed in, not generated |
-| Type changes | `USING` is emitted only when no assignment conversion exists. Decided from all of `pg_cast` plus Postgres's rules for conversions it doesn't list: to string types needs no `USING`, from string types does, arrays follow their element types, domains their base type. Never emitted unconditionally, because explicit casts can truncate silently where assignment casts raise an error |
+| Type changes | `USING` is emitted only when no assignment conversion exists. Decided from all of `pg_cast` plus Postgres's rules for conversions it doesn't list: to string types needs no `USING`, from string types does, arrays follow their element types, domains their base type. Cast data is re-read fresh each time SQL is generated. Never emitted unconditionally, because explicit casts can truncate silently where assignment casts raise an error |
 | Risk warnings | Summary panel plus a `-- WARNING` comment above each risky statement |
-| Validate | Dry run on its own short-lived connection, inside `BEGIN … ROLLBACK`, with `lock_timeout`, one statement per extended-protocol message (`queryMode: 'extended'`, since `pg` otherwise uses the simple protocol). Warns first when the host isn't local |
-| Expression normalization | On its own short-lived connection, using a temporary copy of the whole table, with the same extended-protocol rule. Falls back to raw-text comparison with a warning when temp tables aren't permitted |
+| Validate | Dry run on its own short-lived connection, inside `BEGIN … ROLLBACK`, with `lock_timeout`, one statement per extended-protocol message (`queryMode: 'extended'`, since `pg` otherwise uses the simple protocol), with the connection's original `search_path` so it predicts the user's own run. Warns first when the host isn't local |
+| Expression normalization | On one reused task connection per window (closed after 30 s idle), with requests queued and each in its own `BEGIN … ROLLBACK`, using a temporary copy of the whole table and the same extended-protocol rule. Inputs normalize 400 ms after typing stops; results are cached. When temp tables aren't permitted, falls back to raw-text comparison with a warning, and creating or editing check constraints is disabled (defaults stay editable) |
+| Connections per window | At most three: main, normalizer, and Validate |
 | Delivery | Copy button, and Save via the native save dialog opening in the last-used folder |
-| Diagram layout | Positions saved locally per database; auto-layout only on request |
-| Runtime | Node only (Electron's bundled Node; pnpm workspaces). `better-sqlite3` for app data; `node:sqlite` to be revisited once stable |
+| Diagram layout | Positions saved locally per database; auto-layout only on request. Positions for tables that no longer exist are pruned on load |
+| Runtime | Node only (Electron's bundled Node; pnpm workspaces). `pg` pinned to an exact version, because `queryMode` is undocumented; upgrades must keep the protocol and SSL tests green. `better-sqlite3` for app data; `node:sqlite` to be revisited once stable |
 
 ## Architecture
 
@@ -93,7 +94,7 @@ The renderer imports `packages/core` and recomputes the diff on every edit, whic
 **Data flow for Generate SQL:**
 
 1. The renderer asks main for the current fingerprint.
-2. If it differs from the loaded one, generation is blocked and the stale banner appears.
+2. If it differs from the baseline's `loadedFingerprint`, the change handler runs and generation stops; the panel regenerates from whatever state the handler leaves, which after an adopt is usually "no changes." If the handler fails, the session is marked stale.
 3. Otherwise core orders the ops and renders the migration: text for display, plus a statement array for Validate.
 
 ## Core package design
@@ -143,9 +144,9 @@ interface Constraint {
 
 Read-only is modeled one way per kind of object. Objects of a **modeled kind** (tables, columns, constraints, indexes, enums) live in their normal maps and carry the optional `readOnly` reason when introspection finds an attribute pgsketch doesn't model; an unsupported index is simply an index with a reason. Objects of an **unmodeled kind** live only in the `unmodeled` map, and are shown, linked to what they depend on, and never touched.
 
-**Identity.** Objects loaded from the database get IDs derived from Postgres identifiers (`t:<table oid>`, `c:<table oid>:<attnum>`, `k:<constraint oid>`, `i:<index oid>`, `e:<type oid>`). These stay stable for the whole session and across reloads, as long as the object still exists. New objects created in the editor get a random UUID. Because a renamed column keeps its ID, the diff engine knows it's a rename, never a drop plus an add.
+**Identity.** Objects loaded from the database get IDs derived from Postgres identifiers (`s:<namespace oid>`, `t:<table oid>`, `c:<table oid>:<attnum>`, `k:<constraint oid>`, `i:<index oid>`, `e:<type oid>`). These stay stable for the whole session and across reloads, as long as the object still exists. New objects created in the editor, schemas included, get a random UUID. Because a renamed column keeps its ID, the diff engine knows it's a rename, never a drop plus an add.
 
-The flip side: once the user runs the migration, new objects get OIDs the editor never saw. So the question "does the database now match my edits?" is answered by comparing **qualified names**, not IDs (`diff/applied.ts`, used by change detection and the round-trip tests).
+The flip side: once the user runs the migration, new objects get OIDs the editor never saw. So the question "does the database now match my edits?" is answered by comparing **qualified names**, not IDs (`diff/applied.ts`, used by change detection and the round-trip tests). The comparison covers every modeled kind, read-only objects included, by qualified name and definition, comparing column order rather than position numbers (Postgres keeps gaps where columns were dropped). Unmodeled objects (views, triggers and so on) are ignored: the user can't edit them, and adopting replaces the whole schema anyway, so an externally added view never blocks "changes applied."
 
 **Two models.** The editor holds `baseline` (exactly what was introspected) and `desired` (baseline plus the user's edits). Removing something from the canvas deletes it from `desired` only. The diff is always `diff(baseline, desired)`.
 
@@ -165,6 +166,8 @@ Runs on `desired` before diffing. Errors block SQL generation and are shown on t
 
 The editor enforces the coupling and cascade rules as you edit; these checks are a backstop that blocks generation if something slips through.
 
+**Auto-names.** Constraints and indexes created in the editor carry `autoName: true`. Before validation and diffing, a pure `assignNames(desired)` pass recomputes every auto-name with `model/naming.ts`, in a fixed order so collision numbers are deterministic. Renaming a pending table or column therefore renames its pending constraints and indexes too. Naming an object yourself sets `autoName: false`. Names of objects loaded from the database are never recomputed.
+
 ### Introspection
 
 Handwritten queries against `pg_catalog`, one per object kind, run inside a single `REPEATABLE READ` read-only transaction so all results describe the same moment:
@@ -178,7 +181,7 @@ Handwritten queries against `pg_catalog`, one per object kind, run inside a sing
 | Indexes | `pg_index`, `pg_class`, `pg_am`, `pg_get_indexdef` | Columns, uniqueness, method, predicate, expressions, sort order and nulls order (`indoption`), INCLUDE columns, opclasses, storage options, `NULLS NOT DISTINCT` (15+) |
 | Enums | `pg_type` (`typtype = 'e'`), `pg_enum` ordered by `enumsortorder` | Name, labels in order (read-only) |
 | Unmodeled objects | `pg_class` (views, materialized views, foreign tables, sequences), `pg_trigger`, `pg_proc`, `pg_policy`, `pg_depend`, `pg_rewrite` | Name, kind, and which tables and columns depend on them |
-| Casts | `pg_cast` (all rows), `pg_type` (category, element type, base type) | Everything the coercion rules need to decide whether a type change needs `USING`, including for types the user picks later |
+| Casts | `pg_cast` (all rows), `pg_type` (category, element type, base type) | Everything the coercion rules need to decide whether a type change needs `USING`, including for types the user picks later. Read at load and again each time SQL is generated; not part of the fingerprint |
 
 Objects owned by extensions (found through `pg_depend` with `deptype = 'e'`) are excluded entirely, so installing an extension never makes its internal tables appear on the canvas.
 
@@ -190,19 +193,19 @@ The model, the cast data and the fingerprint are all read inside the same snapsh
 
 ### Fingerprint
 
-One query that hashes **selected columns** of the catalogs into a single value, covering exactly the objects introspection reads (including read-only and unmodeled ones). It hashes definitions (names, types, flags, expression and definition text) **and the OIDs of tables, columns, constraints, indexes and types**. OIDs don't change on `VACUUM`, `ANALYZE`, `VACUUM FULL` or `TRUNCATE`, but they do change when a table is dropped and recreated or a database is restored from a dump; without them, an identical-looking schema with new OIDs would pass the fingerprint while every ID in a saved draft pointed at nothing. It never hashes statistics or housekeeping columns such as `reltuples`, `relpages` or `relfrozenxid`, which change on `VACUUM`, `ANALYZE` and autovacuum and would cause false stale banners.
+One query that hashes **selected columns** of the catalogs into a single value, covering exactly the objects introspection reads (including read-only and unmodeled ones). It hashes definitions (names, types, flags, expression and definition text) **and the OIDs of schemas, tables, columns, constraints, indexes and types**. OIDs don't change on `VACUUM`, `ANALYZE`, `VACUUM FULL` or `TRUNCATE`, but they do change when a table is dropped and recreated or a database is restored from a dump; without them, an identical-looking schema with new OIDs would pass the fingerprint while every ID in a saved draft pointed at nothing. For unmodeled objects it hashes only OID, name, kind and dependencies, which is all the app uses them for: editing a function body or a policy doesn't flip it, but a view whose dependencies change does. Cast data isn't fingerprinted at all; it's re-read fresh every time SQL is generated. It never hashes statistics or housekeeping columns such as `reltuples`, `relpages` or `relfrozenxid`, which change on `VACUUM`, `ANALYZE` and autovacuum and would cause false stale banners.
 
-A coverage test keeps the fingerprint and introspection in sync: it reads the list of catalog **tables** from the test database (`pg_class` rows in `pg_catalog` with `relkind = 'r'`), finds which of them the introspection SQL reads, and fails if the fingerprint doesn't cover each one. Matching against real catalog table names avoids false hits on functions like `pg_get_expr`.
+A coverage test keeps the fingerprint and introspection in sync: it reads the list of catalog **tables** from the test database (`pg_class` rows in `pg_catalog` with `relkind = 'r'`), finds which of them the introspection SQL reads, and fails if the fingerprint doesn't cover each one. Matching against real catalog table names avoids false hits on functions like `pg_get_expr`. The cast queries are explicitly excluded from the check.
 
 ### Diff engine
 
 `diff(baseline, desired): ChangeOp[]` compares objects by ID:
 
 - In `desired` only → create.
-- In `baseline` only → drop. Dropping a table or column also drops every foreign key that points at it, including FKs on other tables. Constraints and indexes that include a removed column are already gone from `desired` (the editor cascades the removal), so they're dropped explicitly before the column instead of silently by Postgres.
+- In `baseline` only → drop. Because the editor cascades removals, everything that depends on a removed table or column (constraints and indexes on the same table, and foreign keys on other tables) is already gone from `desired`, so each gets an explicit drop instead of being dropped silently by Postgres. As a backstop, the diff still drops any FK that points at a dropped table or column.
 - In both → compare field by field and emit one operation per changed property (rename, type change, nullability, default, comment...).
 - An existing table whose schema differs → a blocking error. The UI never allows this, so it signals a bug.
-- Read-only objects never produce operations. Anything that would require dropping one (for example, a column a view depends on) is reported as a blocking error rather than generated.
+- Read-only objects are never modified or recreated. They're dropped only when their own table or column is removed, as an explicit drop flagged destructive. Anything that would require dropping a read-only object outside that table (a view on the column, a read-only FK on another table, a policy) is a blocking error rather than generated.
 - When both sides of a foreign key change type in the same migration and the in-between state would be incompatible (no equality operator between the old and new types), the FK is dropped before and re-added after. In every other case Postgres rebuilds the FK itself during `ALTER COLUMN TYPE`.
 
 ```ts
@@ -256,7 +259,7 @@ Within a phase, operations are sorted by qualified name, so the same changes alw
 
 | Level | Operations |
 | --- | --- |
-| Destructive (data lost) | `dropTable`, `dropColumn`, lossy type changes |
+| Destructive (data lost) | `dropTable`, `dropColumn`, lossy type changes, and read-only objects dropped with their own table or column (listed by name) |
 | May fail (depends on data) | `setNotNull`; `addColumn` with NOT NULL and no default on an existing table; adding unique, check or FK constraints; PK changes; type changes that need a cast |
 | Breaks app code | `renameTable`, `renameColumn` |
 | Locks or slow on large tables | Type changes that rewrite the table; `setNotNull` and constraint additions that scan it; `addIndex`, which blocks writes for its whole duration (`CONCURRENTLY` can't run inside the transaction) |
@@ -266,7 +269,7 @@ Type changes go through a lookup table with two lists: known-safe widenings (`sm
 
 ### SQL rendering
 
-`render(ops, risks): string` produces the migration text:
+`render(ops, risks, context)` produces the migration text and its statement array:
 
 - Signature: `render(ops, risks, context)`, where `context` holds `generatedAt`, `dbName` and the cast data. `render` never reads the clock or the database, so the same inputs always give the same text.
 - Every identifier goes through `quoteIdent` (always double-quoted, embedded quotes doubled) and every literal through `quoteLiteral`. No string concatenation of names anywhere else.
@@ -281,20 +284,25 @@ Type changes go through a lookup table with two lists: known-safe widenings (`sm
 
 Postgres stores defaults and check expressions in a normalized form (`CURRENT_TIMESTAMP` comes back differently than typed, `'active'` comes back as `'active'::text`). Comparing raw text would produce false changes.
 
-`normalizeExpression(query, expr, context)` asks the connected database for the canonical form, on its own short-lived connection so it can never interfere with another transaction. `context` carries the target table's full column list (existing and pending), so expressions that reference other columns, like `end_date > start_date`, can be normalized:
+`normalizeExpression(query, expr, context)` asks the connected database for the canonical form, on the normalizer's own task connection so it can never interfere with another transaction. `context` carries the target table's full column list (existing and pending), so expressions that reference other columns, like `end_date > start_date`, can be normalized, plus the connection's original `search_path`, read once at connect time before it was pinned:
 
 1. `BEGIN`.
-2. Create a temporary table with a copy of every column of the target table, plus the expression as a default (or as a check constraint).
-3. Read it back with `pg_get_expr` (or `pg_get_constraintdef`).
-4. `ROLLBACK`.
+2. `SET LOCAL search_path` to the connection's original value, so unqualified names the user typed (such as `uuid_generate_v4()` from an extension installed in `public`) resolve as they would in their own session.
+3. Create a temporary table with a copy of every column of the target table, plus the expression as a default (or as a check constraint).
+4. `SET LOCAL search_path = ''`, then read the expression back with `pg_get_expr` (or `pg_get_constraintdef`). Names were bound when the table was created, so the output comes back fully qualified (`public.uuid_generate_v4()`).
+5. `ROLLBACK`.
+
+If a name still doesn't resolve, the error shown on the input suggests schema-qualifying it.
 
 Each statement goes through `runSingle(client, sql)`, which always passes `queryMode: 'extended'`. That matters: `pg` only uses the extended protocol when a query has parameter values or this option is set, and an empty values array falls back to the simple protocol, which accepts several statements. Under the extended protocol Postgres accepts exactly one statement per message, so a malicious or mistyped expression like `1); COMMIT; DROP TABLE …` fails with a syntax error instead of executing.
 
-For check constraints, step 3 also reads the temporary constraint's `conkey`, which gives the columns the expression references. That's how the editor knows which checks to remove along with a column.
+For check constraints, step 4 also reads the temporary constraint's `conkey`, which gives the columns the expression references. That's how the editor knows which checks to remove along with a column.
 
-The desired model stores only normalized expressions, so the diff compares like with like. A syntax or type error at step 2 is shown on the input as a validation error, which doubles as live checking for custom expressions. Presets (`now()`, `gen_random_uuid()`, constants) are normalized the same way once per session and cached.
+The desired model stores only normalized expressions, so the diff compares like with like. A syntax or type error at step 3 is shown on the input as a validation error, which doubles as live checking for custom expressions. Presets (`now()`, `gen_random_uuid()`, constants) are normalized the same way once per session and cached.
 
-If the role can't create temporary tables (TEMP privilege revoked, or a read-only replica), normalization falls back to comparing raw text, and the app shows a one-time warning that expression changes may appear as false differences.
+If the role can't create temporary tables (TEMP privilege revoked, or a read-only replica), normalization falls back to comparing raw text, and the app shows a one-time warning that expression changes may appear as false differences. In that mode, creating or editing check constraints is disabled with an explanation, because without the temporary constraint there's no reliable list of the columns a check references, which the removal cascade and validation depend on. Existing checks keep working, since introspection supplies their columns, and custom defaults stay editable.
+
+**Cost:** expression inputs normalize 400 ms after typing stops, and results are cached per expression and table context. The normalizer reuses one task connection per window, closes it after 30 seconds idle, and queues requests on it.
 
 ## Desktop app design
 
@@ -304,15 +312,15 @@ The main process owns everything with side effects (the database connection, loc
 
 | Service | Responsibility |
 | --- | --- |
-| Connection manager | Holds the **main connection** (one `pg.Client` per window) used only for introspection and fingerprint polling, with queries serialized so they never interleave. Builds explicit SSL options from the selected mode (including the `prefer` fallback), pins `search_path = ''`, checks the version, maps errors, and sets `application_name = 'pgsketch'` |
-| Task connections | Opens a separate short-lived connection with the same settings for each Validate run and normalization batch, and closes it afterwards. Nothing else ever shares a connection with an open transaction |
+| Connection manager | Holds the **main connection** (one `pg.Client` per window) used only for introspection and fingerprint polling, with queries serialized so they never interleave. Builds explicit SSL options from the selected mode (including the `prefer` fallback), records the original `search_path` and then pins it to `''`, checks the version, maps errors, and sets `application_name = 'pgsketch'` |
+| Task connections | Separate connections with the same settings, never shared with an open transaction: Validate opens a short-lived one per run; the normalizer reuses one per window, closed after 30 seconds idle. With the main connection, that's at most three per window |
 | `runSingle` | Executes one statement with `queryMode: 'extended'`; the only way user-influenced SQL reaches a task connection |
 | Introspector | Runs the core introspection in a read-only snapshot and returns `{ model, casts, fingerprint }` |
 | Fingerprint poller | Every 5 s while connected, and on window focus. Compares with the **last-seen** fingerprint and pushes `schema:changed` only when it differs, so a stale session isn't re-notified every 5 s |
-| Normalizer | Runs core `normalizeExpression` on a task connection, with a per-session cache |
-| Validator | Runs the dry run on a task connection (see Validate flow) |
+| Normalizer | Runs core `normalizeExpression` on its reused task connection, queuing requests, with a per-session cache |
+| Validator | Runs the dry run on its own task connection (see Validate flow) |
 | App store | `better-sqlite3` database for connections, drafts, layouts and settings |
-| Secrets | Encrypts and decrypts passwords with `safeStorage` |
+| Secrets | Encrypts and decrypts passwords with `safeStorage`. Checks the keyring backend only after the app's `ready` event, since it reports `unknown` before then, and treats `unknown` like `basic_text` |
 | File service | Native save dialog, remembers the last folder, writes the `.sql` file |
 | Instance lock | `app.requestSingleInstanceLock()`; a second launch focuses the existing window |
 
@@ -328,10 +336,10 @@ Every channel has a zod schema for its input, validated in the main process befo
 | `connection.openSaved` | Saved connection ID | Session info; the password is decrypted in main and never sent to the renderer |
 | `connection.close` | none | none |
 | `connection.recent` | none | Saved connections without passwords |
-| `connection.forget` | Connection ID | none |
+| `connection.forget` | Connection ID | none; also deletes that connection's drafts and layouts |
 | `schema.load` | none | `{ model, casts, fingerprint }` |
-| `schema.fingerprint` | none | Current fingerprint |
-| `expr.normalize` | Expression, kind (default or check), target type, table context | Normalized text, an error, or a fallback notice |
+| `schema.fingerprint` | none | Current fingerprint. A sibling channel, `schema.casts`, returns fresh cast data for SQL generation |
+| `expr.normalize` | Expression, kind (default or check), target type, table context | Normalized text plus, for checks, the referenced column IDs; or an error; or a fallback notice (in which case check editing is disabled) |
 | `sql.validate` | Statements, expected fingerprint | Per-statement results |
 | `sql.save` | SQL text, suggested filename | Saved path, or cancelled |
 | `draft.get` / `draft.put` / `draft.clear` | `dbKey`, draft | Draft |
@@ -368,18 +376,19 @@ Events from main to renderer: `schema:changed`, `connection:lost`.
 2. Compute the `dbKey`: the saved connection ID plus database name, or for unsaved connections a hash of host, port, user and database.
 3. `schema.load`: baseline model, cast data and fingerprint, all from one snapshot.
 4. Load the saved draft for this `dbKey`. Restore it as `desired` only if its stored fingerprint equals the current one **and** every OID-based ID in it exists in the baseline. Otherwise run the change handler (below): if the database matches the draft by qualified name, show "Changes applied" and clear the draft; if not, discard it with a one-line notice.
-5. Load saved layout positions. Tables without a position are placed by auto-layout.
+5. Load saved layout positions (after any remap the handler did), and prune rows for tables that no longer exist. Tables without a position are placed by auto-layout.
 6. Start the fingerprint poller.
 
 ### Editor state
 
 Zustand stores, normalized, no Immer to start:
 
-- **Schema store**, split into slices so no file grows unbounded: `core` (`baseline`, `desired`, `loadedFingerprint`, `stale`, load, adopt, restore, the change handler), `tables`, `columns`, `constraints` (including FKs and indexes) and `schemas`. Each action edits `desired` only.
-- **Coupling rules in the actions:** turning PK on turns NOT NULL on (and turning PK off leaves it on); identity columns keep NOT NULL and can't take a default.
-- **Cascade on column removal:** removing a column also marks every constraint and index on that table that includes it as removed, and restoring the column restores them.
-- **Derived diff:** a memoized selector computes `diff(baseline, desired)`, `assessRisk` and validation errors whenever `desired` changes. From the ops it builds a status map: `id → 'added' | 'modified' | 'removed'` plus old values for hover.
-- **UI store:** selection, the cell being edited, open popover, zoom level, schema filter.
+- **Schema store**, split into slices so no file grows unbounded: `core` (`baseline`, `desired`, `loadedFingerprint`, `stale`, load, adopt, restore, the change handler), `tables`, `columns`, `constraints` (including FKs and indexes) and `schemas`. Each action edits `desired` only and increments its version counter.
+- **New tables** start with an `id bigint GENERATED ALWAYS AS IDENTITY` primary key column.
+- **Coupling rules in the actions:** turning PK on turns NOT NULL on (and turning PK off leaves it on); identity columns keep NOT NULL and can't take a default. Toggling PK never changes a column's type or adds identity.
+- **Cascade on column removal:** removing a column also marks as removed every constraint and index on that table that includes it, and every foreign key on other tables that references it. Restoring the column restores them all. Read-only ones on the same table are included; if a read-only object elsewhere depends on the column, the removal is refused with a message naming it. Table deletion follows the same rule.
+- Derived diff: a memoized selector runs `assignNames`, then computes `diff(baseline, desired)`, `assessRisk` and validation errors whenever `desired` changes. From the ops it builds a status map: `id → 'added' | 'modified' | 'removed'` plus old values for hover.
+- **UI store:** selection, the cell being edited, open popover, zoom level, schema filter, whether normalization is in fallback mode.
 - **Layout store:** node positions; saved to the app store debounced by 500 ms.
 - **Draft persistence:** `desired` + `loadedFingerprint` saved debounced by 1 s, keyed by `dbKey`.
 
@@ -391,8 +400,8 @@ The canvas renders the **union** of `baseline` and `desired`: removed objects co
 
 - Header: `schema.table`. Double-click the name to rename. For a pending (new) table, the schema part is a dropdown listing existing schemas plus "New schema…"; for an existing table it's plain text. Hover or selection shows a toolbar (`NodeToolbar`): add column, add index, add check, comment, delete table.
 - Column rows: name · type · badges (PK, NN, UQ) · default chip (`= now()`) · FK target (`→ orgs.id`). A connection handle on each row's left and right edge.
-- Footer: "N indexes · M checks", expands inline.
-- New table: double-click empty canvas. It lands in the schema currently selected in the schema filter, or `public` if all are shown and it exists, otherwise the first schema.
+- Footer: "N indexes · M checks", expands inline, next to a badge for unmodeled objects attached to the table ("2 views · 1 trigger") that lists their names on hover. Sequences behind identity or `serial` columns are represented by the column itself; standalone objects not tied to any table aren't shown in 0.1.0, but appear by name in blocking messages.
+- New table: double-click empty canvas. It lands in the schema currently selected in the schema filter, or `public` if all are shown and it exists, otherwise the first schema. It starts with an `id bigint` identity primary key column.
 
 **Editing interactions:**
 
@@ -403,12 +412,12 @@ The canvas renders the **union** of `baseline` and `desired`: removed objects co
 | Type | Click → searchable picker popover (built-in types plus existing enums); parameter inputs for `varchar`, `numeric`, etc.; array toggle |
 | PK / NN / UQ | Click badge to toggle (faded when off). NN is locked on while PK is on, and on identity columns |
 | Default | Click chip → presets for the type, constant value, custom expression. Disabled on identity columns |
-| Row actions | Hover `⋯` → comment, delete. Deleting a column also marks the constraints and indexes that include it as removed |
+| Row actions | Hover `⋯` → comment, delete. Deleting a column also marks the constraints and indexes that include it, and FKs on other tables that reference it, as removed |
 | Table and column comments | Toolbar or row menu → small popover with a text field |
 | Foreign key | Drag from a column's handle to a column in any table, including the same table (self-reference) |
 | FK edge | Click → popover with `ON DELETE`, `ON UPDATE`, remove |
 | Index | Footer → pick columns in order, toggle unique |
-| Check constraint | Footer → expression input (normalized live) |
+| Check constraint | Footer → expression input (normalized 400 ms after typing stops). Disabled with an explanation when normalization is in fallback mode |
 | Keyboard | Tab moves name → type → next row; Enter on last row adds a column |
 
 **Rendering rules:**
@@ -439,12 +448,12 @@ Database name and host, the schema filter, a change counter ("5 changes · 1 des
 
 One handler, `onSchemaChanged`, runs in three situations: the poller reports a new fingerprint, the Generate/Validate pre-check finds a different fingerprint, or session start finds a draft that can't be restored as-is.
 
-1. Re-introspect with `schema.load` (without replacing anything yet).
+1. Re-introspect with `schema.load` (without replacing anything yet). Everything below is decided only after the load returns: whether there are unsaved edits, the comparison and the adopt happen in one synchronous step with no `await` in between, and async work (saving layouts, clearing the draft) runs after the adopt. As a guard, `desired` has a version counter that every edit increments; the handler records it when the load returns and checks it again just before adopting, re-running the comparison against the already-fetched schema if it moved. While an inline input or popover is open, an adopt waits; when the editor commits or cancels, the comparison re-runs, so typed but uncommitted text is never lost.
 2. If there are unsaved edits and the new schema matches `desired` by qualified name (core `diff/applied.ts`), the user ran the SQL: adopt the new schema as both baseline and desired, move layout positions from old IDs to the new IDs of tables with the same qualified name, clear the draft, and show "Changes applied."
 3. If there are no unsaved edits, adopt the new schema silently.
 4. Otherwise set `stale = true` and show the banner: "The database schema changed outside pgsketch." with **Reload**, which asks "Reload and discard N unsaved changes?".
 5. While stale, Generate SQL and Validate are disabled with an explanation. Each further change reported by the poller runs the handler again, so finishing a partial manual apply recovers automatically.
-6. Generate SQL and Validate always call `schema.fingerprint` first, even if the poller hasn't fired, so correctness never depends on poll timing.
+6. Generate SQL and Validate always call `schema.fingerprint` first and compare it with the baseline's `loadedFingerprint`, never with the poller's last-seen value, which only prevents duplicate notifications. `loadedFingerprint` changes only when a load or adopt succeeds, so correctness never depends on poll timing. If the handler fails for any reason (for example, `schema.load` throws), the session is marked stale. Failures block generation; they never allow it.
 
 ### SQL panel
 
@@ -457,9 +466,9 @@ A bottom drawer opened by Generate SQL:
 
 ### Validate flow
 
-1. Re-check the fingerprint; if it changed, run `onSchemaChanged` and continue only if the result isn't stale.
+1. Re-check the fingerprint against `loadedFingerprint`. If it differs, run `onSchemaChanged` and stop: the statements were generated for the old schema, and the SQL panel regenerates from the new state.
 2. If the host isn't local (`localhost`, `127.0.0.1`, `::1`, or a socket path), confirm first: it takes locks on that server.
-3. Open a task connection. `BEGIN`, `SET LOCAL lock_timeout = '3s'`, `SET LOCAL statement_timeout = '30s'`.
+3. Open a task connection. `BEGIN`, `SET LOCAL lock_timeout = '3s'`, `SET LOCAL statement_timeout = '30s'`, and `SET LOCAL search_path` to the connection's original value, so the dry run behaves like the user's own run.
 4. Run the statements one at a time through `runSingle`, recording each result and stopping at the first error. A statement can't smuggle in a `COMMIT`, because extended-protocol messages accept only one statement.
 5. `ROLLBACK` always, in a `finally`, then close the task connection.
 6. Show results next to each statement: passed, failed (with the Postgres error and code), or not run.
@@ -528,7 +537,7 @@ All app paths come from one data directory, which the `PGSKETCH_DATA_DIR` enviro
 - Strict CSP: bundled scripts only, no inline scripts, no remote resources.
 - Preload exposes only the typed API from the IPC table; never raw `ipcRenderer`.
 - Every IPC input validated with zod in the main process.
-- Passwords: `safeStorage` (libsecret on Linux). If the keyring backend is unavailable, `safeStorage` falls back to a weak hardcoded key on Linux, so the app checks `safeStorage.getSelectedStorageBackend()` and refuses to remember passwords when it reports `basic_text`. Saved connections are opened by ID, so passwords never cross IPC.
+- Passwords: `safeStorage` (libsecret on Linux). If the keyring backend is unavailable, `safeStorage` falls back to a weak hardcoded key on Linux, so the app checks `safeStorage.getSelectedStorageBackend()` and refuses to remember passwords when it reports `basic_text` or `unknown`. The check runs only after the app's `ready` event, because the function returns `unknown` before then. Saved connections are opened by ID, so passwords never cross IPC.
 - All SQL built through `quoteIdent` and `quoteLiteral`; user values sent to `pg` as parameters wherever possible.
 - Statements that embed user-written expressions (normalization, Validate) are sent one per extended-protocol message, so an expression can't append extra statements such as `COMMIT`.
 - Transactions never share a connection with other work: Validate and normalization use task connections.
@@ -560,7 +569,7 @@ A pnpm monorepo with two workspaces: `packages/core` (pure TypeScript) and `apps
 | Layout | `elkjs` in a web worker | Auto-arrange with per-column ports |
 | Positioning | Radix Popover (Floating UI) | Portaled popovers |
 | SQL view | CodeMirror 6 + `@codemirror/lang-sql` | SQL preview, expression inputs |
-| Postgres | `pg` (node-postgres) | Main and task connections, SSL, introspection, validate |
+| Postgres | `pg` (node-postgres) | Main and task connections, SSL, introspection, validate. Pinned to an exact version, since `queryMode` is undocumented |
 | Validation | zod | IPC inputs, connection forms |
 | App data | `better-sqlite3` (`node:sqlite` to be revisited once stable) | Connections, drafts, layouts, settings |
 | Secrets | Electron `safeStorage` | Passwords |
@@ -659,7 +668,7 @@ The build is 121 thin phases in 16 milestones; each phase changes at most three 
 | B4 | Parse `format_type` output into `PgType`; render `PgType` back to SQL | `sql/pgtype.ts` | Table-driven: `varchar(255)`, `numeric(10,2)`, `timestamptz`, `text[]`, schema-qualified enum |
 | B5 | Validation: empty and over-63-byte names; Postgres namespaces (relations per schema, constraints per table, PK/unique names as index names) | `model/validate.ts` | An index named like a table fails; two tables with the same check name pass |
 | B6 | Validation: one PK per table, existing referenced columns, PK and identity coupling, FK targets (PK, unique constraint, or qualifying unique index; self-references allowed), type parameters, pending table schema exists | `model/validate.ts` | FK onto a partial unique index fails; an index on a removed column fails; a nullable PK column fails |
-| B7 | Naming: port of `makeObjectName` and numbered collision handling | `model/naming.ts` | *DB*: unnamed PK, unique, FK, one- and multi-column checks and indexes created in a container, including very long names and collisions, get the same names as ours |
+| B7 | Naming: port of `makeObjectName`, numbered collision handling, and the `assignNames` pass over auto-named objects | `model/naming.ts` | *DB*: unnamed PK, unique, FK, one- and multi-column checks and indexes created in a container, including very long names and collisions, get the same names as ours; renaming a pending table renames its auto-named constraints while a user-named one stays |
 
 ### C. Introspection
 
@@ -680,7 +689,7 @@ The build is 121 thin phases in 16 milestones; each phase changes at most three 
 
 | # | Phase | Files | Test |
 | --- | --- | --- | --- |
-| D1 | Fingerprint query over selected definition columns plus OIDs | `fingerprint/fingerprint.ts` | *DB*: stable when nothing changes and after `INSERT`, `VACUUM`, `VACUUM FULL` and `ANALYZE`; changes after each kind of DDL and after dropping and recreating an identical table |
+| D1 | Fingerprint query over selected definition columns plus OIDs | `fingerprint/fingerprint.ts` | *DB*: stable when nothing changes and after `INSERT`, `VACUUM`, `VACUUM FULL` and `ANALYZE`; changes after each kind of DDL and after dropping and recreating an identical table; editing a function body or a policy doesn't change it |
 | D2 | Coverage guard against the database's real catalog table list | `fingerprint/fingerprint.ts` | Fails when an introspection query reads a catalog table the fingerprint doesn't cover; ignores functions like `pg_get_expr` |
 | D3 | Assemble model, cast data and fingerprint in one snapshot | `introspect/index.ts` | *DB*: snapshot test of `fixtures/basic.sql`; fingerprint read in the same transaction |
 
@@ -698,7 +707,7 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | E6 | Constraints: add, drop, rename; changed = drop + add; self-referencing FKs | `diff/constraints.ts` | Changed FK action yields drop + add; renamed constraint yields `renameConstraint` |
 | E7 | Indexes: same rules as constraints | `diff/indexes.ts` | Column order change yields drop + add; rename yields `renameIndex` |
 | E8 | Comments on tables and columns | `diff/comments.ts` | Set, change, clear |
-| E9 | Read-only guard: block changes that would drop dependent read-only objects | `diff/readonly-guard.ts` | Dropping a column used by a view returns a blocking error, no op |
+| E9 | Read-only guard: block changes that would drop dependent read-only objects | `diff/readonly-guard.ts` | Dropping a column used by a view or by a read-only FK on another table returns a blocking error, no op; a partial index on the same table is dropped and flagged destructive |
 | E10 | FK type-change rule: drop and re-add only when both sides change to an incompatible in-between state | `diff/fk-type-changes.ts` | `int → bigint` on one side emits no extra ops; `uuid → text` on both sides emits drop + add |
 | E11 | Assemble the diff, including dropping FKs that point at dropped tables or columns | `diff/index.ts` | Dropping a referenced table also yields `dropConstraint` for the referencing FK |
 
@@ -709,7 +718,7 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | F1 | Phase assignment and deterministic sort | `order/order.ts` | FK added after its target table; same input gives identical order |
 | F2 | Render schema statements | `render/schemas.ts` | Snapshot of `CREATE SCHEMA` |
 | F3 | Render table statements | `render/tables.ts` | Snapshot: create with identity PK, rename, drop |
-| F4 | Render column statements; `USING` only where the cast map has no assignment cast | `render/columns.ts` | Snapshot: `text → integer` includes `USING`; `varchar(50) → varchar(20)` doesn't |
+| F4 | Render column statements; `USING` only where the coercion rules find no assignment conversion | `render/columns.ts` | Snapshot: `text → integer` includes `USING`; `varchar(50) → varchar(20)` doesn't |
 | F5 | Render constraint and index statements, including renames | `render/constraints.ts`, `render/indexes.ts` | Snapshot: composite FK with actions; index rename |
 | F6 | Render comment statements | `render/comments.ts` | Snapshot with a quote inside the comment |
 | F7 | Assemble the migration: header from `context`, `BEGIN`/`COMMIT`; return text and statement array | `render/migration.ts` | Snapshot with fixed `generatedAt` is byte-identical across runs |
@@ -729,7 +738,7 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | H1 | Name-based comparison: does a model match the desired model by qualified names? | `diff/applied.ts` | Same schema with different IDs matches; one extra column doesn't |
 | H2 | Round-trip helper: apply migration to a fresh database, re-introspect, compare with `applied.ts` | `test/roundtrip.ts` | *DB*: 20 hand-written edit cases round-trip exactly |
 | H3 | `fast-check` arbitraries for models and edits | `test/arbitraries.ts` | *DB*: property test, 200 runs, every generated edit round-trips |
-| H4 | Expression normalization on its own connection, whole-table temp copy, extended protocol, TEMP fallback | `normalize/expression.ts` | *DB*: `CURRENT_TIMESTAMP` and `now()` normalize alike; `end_date > start_date` normalizes; `1); COMMIT; …` fails; a role without TEMP gets the fallback |
+| H4 | Expression normalization on its own connection, whole-table temp copy, extended protocol, TEMP fallback | `normalize/expression.ts` | *DB*: `CURRENT_TIMESTAMP` and `now()` normalize alike; an unqualified `uuid_generate_v4()` from an extension in `public` comes back as `public.uuid_generate_v4()`; `end_date > start_date` normalizes; `1); COMMIT; …` fails; a role without TEMP gets the fallback |
 | H5 | Normalization used by round trips so defaults compare cleanly | `test/roundtrip.ts` | *DB*: round trips with custom defaults produce no phantom diff |
 | H6 | Nightly property run with 2,000 cases across Postgres 14–18 | `.github/workflows/nightly.yml` | A manual trigger of the workflow passes |
 
@@ -742,7 +751,7 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | I3 | Logger with password and connection-string redaction | `main/log.ts` | A logged URL has its password removed |
 | I4 | App database with migrations | `store/db.ts`, `store/migrations/001_init.sql` | Temp database reaches `user_version = 1` with all four tables and the SSL and URL columns |
 | I5 | Connections repository | `store/connections.ts` | Insert, list by recency, delete; URL stored without password or `sslmode` |
-| I6 | Secrets with keyring backend check | `services/secrets.ts` | With `basic_text` mocked, remembering a password is refused |
+| I6 | Secrets with keyring backend check | `services/secrets.ts` | With `basic_text` or `unknown` mocked, remembering a password is refused; the check never runs before `ready` |
 | I7 | Driver error mapping, including SSL errors | `services/errors.ts` | Each signal in the error table maps to its message |
 | I8 | Main connection: SSL options built per mode (with `prefer` fallback), `search_path` pin, version check, `application_name`, serialized queries | `services/connection.ts`, `services/ssl.ts` | *DB*: against an SSL-enabled container, `require` connects, `verify-full` with the wrong CA fails, `prefer` falls back on a server without SSL; Postgres 13 is rejected; concurrent queries never interleave |
 | I9 | Task connections and `runSingle` (`queryMode: 'extended'`) | `services/task-connection.ts`, `services/run-single.ts` | *DB*: a task connection's open transaction is invisible to the main connection; `SELECT 1; SELECT 2` through `runSingle` fails |
@@ -762,12 +771,12 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | # | Phase | Files | Test |
 | --- | --- | --- | --- |
 | K1 | Introspector service and `schema.load` channel | `services/introspector.ts`, `main/ipc/schema.ts` | E2E: the editor receives the fixture model, cast data and fingerprint |
-| K2 | Schema store core slice and table actions (add, remove, rename, restore) | `stores/schema/core.ts`, `stores/schema/tables.ts` | Rename changes `desired` only; remove then restore leaves an empty diff |
+| K2 | Schema store core slice and table actions (add, remove, rename, restore) | `stores/schema/core.ts`, `stores/schema/tables.ts` | A new table starts with an `id bigint` identity PK; rename changes `desired` only; remove then restore leaves an empty diff |
 | K3 | Derived diff, risks, validation and status map | `stores/derived.ts`, `canvas/status.ts` | Renamed column has status `modified` with its old name |
 | K4 | Column actions with coupling rules: add, remove, rename, flags, type, default, comment | `stores/schema/columns.ts` | Turning PK on sets NN; NN can't be turned off while PK is on; identity rejects a default |
 | K5 | Constraint, index and FK actions, including self-references | `stores/schema/constraints.ts` | A self-referencing FK produces one `addConstraint` |
 | K6 | Schema actions: create schema; change schema of pending tables only | `stores/schema/schemas.ts` | Changing an existing table's schema is rejected by the action |
-| K7 | Cascade on column removal: constraints and indexes that include the column are removed with it and restored with it | `stores/schema/columns.ts`, `stores/schema/constraints.ts` | Removing a column in a composite unique constraint and a multi-column check marks both removed; restore brings all three back; the diff drops them before the column |
+| K7 | Cascade on column removal: constraints and indexes on the table that include the column, and FKs on other tables that reference it, are removed with it and restored with it | `stores/schema/columns.ts`, `stores/schema/constraints.ts` | Removing a column in a composite unique constraint, a multi-column check, and an FK from another table marks all three removed; restore brings all four back; the diff drops them before the column and generation isn't blocked. A column with a partial index can be removed (the index is listed as destructive); one used by a view or a read-only FK on another table can't |
 
 ### L. Canvas rendering
 
@@ -777,7 +786,7 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | L2 | Static table node and column rows | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | Component test: badges, default chip and FK target render |
 | L3 | FK edges with crow's-foot markers, self-reference loops, per-column handles | `canvas/FkEdge.tsx`, `canvas/ColumnRow.tsx` | E2E: edge count equals FK count; a self-reference renders as a loop |
 | L4 | Auto-layout in a worker with per-column ports | `layout/elk.worker.ts`, `layout/autoLayout.ts` | Unit: ELK output maps to node positions; no overlapping nodes |
-| L5 | Layout repository and channels | `store/layouts.ts`, `main/ipc/layouts.ts` | Positions saved and read back per `dbKey` |
+| L5 | Layout repository and channels | `store/layouts.ts`, `main/ipc/layouts.ts`, `main/ipc/connection.ts` | Positions saved and read back per `dbKey`; rows for missing tables are pruned on load; forgetting a connection deletes its layouts |
 | L6 | Renderer layout store with debounced save and restore | `stores/layout.ts` | E2E: moved node keeps its position after restart |
 | L7 | Compact nodes below 70% zoom | `canvas/CompactNode.tsx`, `canvas/Canvas.tsx` | E2E: zooming out switches node type |
 | L8 | Status styling: added, modified, removed, error, read-only with reason | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | Component test: each status applies its style |
@@ -795,24 +804,24 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | M6 | New table on double-click in the filtered schema; table toolbar | `canvas/Canvas.tsx`, `canvas/TableToolbar.tsx` | E2E: a new table appears at the cursor with its name focused |
 | M7 | Schema picker for pending tables, with "New schema…" | `editors/SchemaPicker.tsx`, `canvas/TableNode.tsx` | E2E: a pending table moves to a new schema; an existing table shows no picker |
 | M8 | Removed items struck through and restorable, including incoming FK edges of a deleted table | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx`, `canvas/FkEdge.tsx` | E2E: deleting a referenced table marks its incoming edges removed; restore brings both back |
-| M9 | Normalizer service on task connections and `expr.normalize` channel | `services/normalizer.ts`, `main/ipc/expr.ts` | *DB*: returns normalized text, a check's referenced columns, errors, and the TEMP fallback |
-| M10 | Expression input with live normalization | `editors/ExpressionInput.tsx` | Component test with mocked API shows errors inline |
+| M9 | Normalizer service on task connections and `expr.normalize` channel | `services/normalizer.ts`, `main/ipc/expr.ts` | *DB*: returns normalized text, a check's referenced columns, errors, and the TEMP fallback; requests reuse one connection, which closes after 30 s idle |
+| M10 | Expression input with live normalization | `editors/ExpressionInput.tsx` | Component test with mocked API shows errors inline; one request 400 ms after typing stops; cached results aren't requested again |
 | M11 | Default popover: presets per type, constant, custom; disabled on identity columns | `editors/DefaultPopover.tsx`, `canvas/ColumnRow.tsx` | E2E: choose `now()` on a `timestamptz` column; the chip can't be opened on an identity column |
 | M12 | FK by dragging between handles, including onto the same table; FK edge popover | `canvas/Canvas.tsx`, `editors/FkPopover.tsx` | E2E: drag creates an FK and a self-reference; changing `ON DELETE` yields drop + add |
 | M13 | Node footer with index editor | `canvas/NodeFooter.tsx`, `editors/IndexEditor.tsx` | E2E: add a composite unique index; it's named `t_a_b_idx` |
-| M14 | Check constraint editor | `editors/CheckEditor.tsx`, `canvas/NodeFooter.tsx` | E2E: invalid check expression shows the Postgres error; a two-column check is named `t_check` |
+| M14 | Check constraint editor | `editors/CheckEditor.tsx`, `canvas/NodeFooter.tsx` | E2E: invalid check expression shows the Postgres error; a two-column check is named `t_check`; in fallback mode the check editor is disabled with an explanation |
 | M15 | Table and column comments | `editors/CommentPopover.tsx`, `canvas/TableToolbar.tsx`, `canvas/ColumnRow.tsx` | E2E: a column comment yields `setComment` |
-| M16 | Read-only objects: lock icon with reason, no edit affordances | `canvas/TableNode.tsx`, `canvas/NodeFooter.tsx` | E2E: a partial index, an exclusion constraint and a generated column can't be edited |
+| M16 | Read-only objects: lock icon with reason, no edit affordances; unmodeled-objects badge in the footer | `canvas/TableNode.tsx`, `canvas/NodeFooter.tsx` | E2E: a partial index, an exclusion constraint and a generated column can't be edited; a table with a view on it shows "1 view" with the name on hover |
 | M17 | Validation errors shown on nodes | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: an index named like a table shows a red outline and message |
 
 ### N. Persistence and change detection
 
 | # | Phase | Files | Test |
 | --- | --- | --- | --- |
-| N1 | Drafts repository and channels | `store/drafts.ts`, `main/ipc/drafts.ts` | Save, read, clear by `dbKey`, including unsaved connections |
+| N1 | Drafts repository and channels | `store/drafts.ts`, `main/ipc/drafts.ts`, `main/ipc/connection.ts` | Save, read, clear by `dbKey`, including unsaved connections; forgetting a connection deletes its drafts |
 | N2 | Fingerprint poller on the main connection, comparing with the last-seen value; `schema.fingerprint` channel; `schema:changed` event | `services/poller.ts`, `main/ipc/schema.ts` | *DB*: an external `ALTER TABLE` emits one event within 5 s and no repeats; `ANALYZE` emits none |
-| N3 | `onSchemaChanged` handler: re-introspect, compare by name, adopt or mark stale; wired to the poller event | `stores/schema/core.ts`, `screens/Editor.tsx` | E2E: running the generated SQL externally shows "Changes applied" and clears the draft; applying half of it marks stale, applying the rest recovers |
-| N4 | Debounced draft saving; restore on session start only with matching fingerprint and existing IDs, otherwise run the handler | `stores/persistence.ts`, `screens/Editor.tsx` | E2E: edits survive a restart; SQL applied while closed shows "Changes applied"; a dump/restore of the database while closed never restores the stale draft |
+| N3 | Debounced draft saving; restore on session start only with matching fingerprint and existing IDs, otherwise discard with a notice | `stores/persistence.ts`, `screens/Editor.tsx` | E2E: edits survive a restart; a dump/restore of the database while closed never restores the stale draft |
+| N4 | `onSchemaChanged` handler: re-introspect, compare by name, adopt or mark stale; wired to the poller event and to session start (replacing N3's plain discard) | `stores/schema/core.ts`, `screens/Editor.tsx` | E2E: running the generated SQL externally shows "Changes applied" and clears the draft; applying half of it marks stale, applying the rest recovers; SQL applied while the app was closed shows "Changes applied" on the next start; an edit made during a slow re-introspect is kept and the session goes stale instead of adopting; an input left open during an external apply delays the adopt, and the typed text is preserved |
 | N5 | Layout remap on adopt: positions move to the new IDs of tables with the same qualified name | `stores/layout.ts`, `stores/schema/core.ts` | E2E: a newly created table keeps the position it had as a pending table after adopt |
 | N6 | Stale banner, reload with confirmation | `chrome/StaleBanner.tsx`, `stores/schema/core.ts` | E2E: an unrelated external change shows the banner; reload discards edits after confirming |
 | N7 | Lost-connection detection and banner | `services/connection.ts`, `chrome/StaleBanner.tsx` | E2E: stopping the container shows the reconnect banner |
@@ -822,11 +831,11 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | # | Phase | Files | Test |
 | --- | --- | --- | --- |
 | O1 | Top bar: database, schema filter slot, change and risk counts, buttons with disabled states | `chrome/TopBar.tsx`, `screens/Editor.tsx` | Generate SQL disabled with no changes or validation errors |
-| O2 | SQL panel with fingerprint pre-check through `onSchemaChanged`, and CodeMirror view | `sql/SqlPanel.tsx`, `sql/SqlView.tsx` | E2E: SQL appears; an unrelated external change blocks it; an applied migration is adopted instead |
+| O2 | SQL panel: pre-check against `loadedFingerprint` (handler on mismatch, generation stops), fresh cast data via `schema.casts`, CodeMirror view | `sql/SqlPanel.tsx`, `sql/SqlView.tsx`, `main/ipc/schema.ts` | E2E: SQL appears; an unrelated external change blocks it; an applied migration is adopted instead; a failing handler leaves generation blocked |
 | O3 | Risk summary | `sql/RiskSummary.tsx` | Component test: counts and expandable lists |
 | O4 | Copy button | `sql/SqlPanel.tsx` | E2E: clipboard holds the SQL |
 | O5 | Save via native dialog, filename pattern, last folder | `services/files.ts`, `store/settings.ts`, `main/ipc/files.ts` | Unit: filename format; the second save opens in the first save's folder |
-| O6 | Validator on a task connection through `runSingle`; `sql.validate` channel | `services/validator.ts`, `main/ipc/sql.ts` | *DB*: `SET NOT NULL` on a column with nulls fails at the right statement; fingerprint unchanged after; the poller never reports a change during a run; an expression containing `; COMMIT;` can't end the transaction |
+| O6 | Validator on a task connection through `runSingle`; `sql.validate` channel | `services/validator.ts`, `main/ipc/sql.ts` | *DB*: `SET NOT NULL` on a column with nulls fails at the right statement; fingerprint unchanged after; the poller never reports a change during a run; an expression containing `; COMMIT;` can't end the transaction; a fingerprint change aborts the run; the dry run uses the original `search_path` |
 | O7 | Validate results and non-local host confirmation | `sql/ValidateResults.tsx`, `sql/SqlPanel.tsx` | E2E: results shown per statement; a non-local host asks first |
 
 ### P. Packaging and release
@@ -876,12 +885,12 @@ The biggest risk is a migration that silently does the wrong thing; most mitigat
 | User expressions escaping the dry run | `runSingle` forces the extended protocol, one statement per message |
 | SSL behaving differently than the user chose, or changing with a `pg` upgrade | SSL options built explicitly per mode; `sslmode` never passed to `pg`; SSL tested against a real server |
 | False stale banners | Fingerprint hashes definition columns and OIDs only, never statistics; poller compares with the last-seen value |
-| Users asked to discard changes they just applied | One change handler that adopts when the database matches the edits by name, at poll time, pre-check and session start |
+| Users asked to discard changes they just applied | One change handler that adopts when the database matches the edits by name, at poll time, pre-check and session start; the adopt is decided synchronously after the load, guarded by a version counter, and deferred while an editor is open, so in-flight edits are never overwritten |
 | Introspection misses a catalog detail added later | Fingerprint coverage test; fixtures that include every modeled and read-only feature |
 | Validate locks a busy table | `lock_timeout` 3 s, `statement_timeout` 30 s, explicit button, non-local confirmation |
 | Catalog differences across Postgres versions | CI matrix 14–18 on every DB test, including Postgres 18's `contype 'n'` rows |
 | Canvas sluggish on large schemas | Text-only cells, single active input, compact nodes below 70% zoom, schema filter, layout in a worker |
-| Passwords stored weakly | Refuse to remember passwords when the keyring backend is `basic_text` |
+| Passwords stored weakly | Refuse to remember passwords when the keyring backend is `basic_text` or `unknown` |
 | `better-sqlite3` breaks in the packaged app | Native rebuild in packaging; packaged smoke test in CI |
 | Flaky E2E runs | Each test gets its own `PGSKETCH_DATA_DIR`, so data and the single-instance lock never collide |
 | Scope creep | Anything outside the goals list goes to the roadmap below |
