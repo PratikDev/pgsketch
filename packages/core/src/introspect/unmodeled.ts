@@ -1,11 +1,10 @@
 import { columnId, schemaId, tableId, unmodeledId } from '../model/ids';
+import type { Oid } from '../model/ids';
 import type { Id, UnmodeledKind, UnmodeledObject } from '../model/types';
 import { notExtensionOwned } from './extensions';
 import type { Query } from './query';
 import { userSchemaSql } from './schemas';
 import { userTableSql } from './tables';
-
-type Oid = number | string;
 
 export interface ObjectRow {
   kind: UnmodeledKind;
@@ -45,19 +44,21 @@ export function toUnmodeled(
       ...deps.map((d) => d.table_oid),
       ...(o.table_oid === null ? [] : [o.table_oid]),
     ];
+    const owner = o.table_oid;
     const columns = [
       ...deps
         .filter((d) => d.attnum > 0)
         .map((d) => columnId(d.table_oid, d.attnum)),
-      ...(o.table_oid === null
+      ...(owner === null
         ? []
-        : (o.attnums ?? []).map((n) => columnId(o.table_oid!, n))),
+        : (o.attnums ?? []).map((n) => columnId(owner, n))),
     ];
     return {
       id: unmodeledId(o.kind, o.oid),
       kind: o.kind,
       schemaId: o.schema_oid === null ? null : schemaId(o.schema_oid),
       name: o.name,
+      ownerTableId: o.table_oid === null ? null : tableId(o.table_oid),
       tableIds: sorted(tableOids.map(tableId)),
       columnIds: sorted(columns),
     };

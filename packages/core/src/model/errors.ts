@@ -18,7 +18,9 @@ export type ValidationCode =
   // found while diffing: edits the editor should never produce
   | 'schema-changed'
   | 'table-schema-changed'
-  | 'column-identity-changed';
+  | 'column-identity-changed'
+  | 'read-only-dependency'
+  | 'read-only-changed';
 
 /** `objectId` is the object the error is shown on. */
 export interface ValidationError {

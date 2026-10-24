@@ -131,6 +131,9 @@ export interface UnmodeledObject {
   /** Null for triggers and policies, which belong to a table. */
   schemaId: Id | null;
   name: string;
+  /** The table a trigger or policy is on; null for everything else. */
+  ownerTableId: Id | null;
+  /** Every table the object depends on, its owner included. */
   tableIds: Id[];
   columnIds: Id[];
 }

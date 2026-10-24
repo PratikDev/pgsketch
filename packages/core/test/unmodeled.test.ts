@@ -61,6 +61,7 @@ test('triggers and policies include their own table and listed columns; ids are 
   );
   expect(trigger).toMatchObject({
     schemaId: null,
+    ownerTableId: 't:100',
     tableIds: ['t:100'],
     columnIds: ['c:100:1', 'c:100:3'],
   });

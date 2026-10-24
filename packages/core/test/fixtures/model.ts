@@ -153,6 +153,7 @@ export const fixtureModel = {
       kind: 'view',
       schemaId: 's:2',
       name: 'open_invoices',
+      ownerTableId: null,
       tableIds: ['t:20'],
       columnIds: ['c:20:3'],
     },

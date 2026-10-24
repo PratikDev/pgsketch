@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 import { introspectUnmodeled } from '../src/introspect/unmodeled';
 import { withSnapshot } from '../src/introspect/query';
 import type { UnmodeledObject } from '../src/model/types';
-import { startPostgres, type TestPostgres } from './pg';
+import { oidOf, startPostgres, type TestPostgres } from './pg';
 
 let pg: TestPostgres;
 
@@ -46,11 +46,12 @@ const columnId = async (table: string, column: string) => {
   return row.id;
 };
 const tableId = async (table: string) =>
-  `t:${(await pg.query<{ oid: number | string }>(`SELECT 'public.${table}'::regclass::oid AS oid`))[0]!.oid}`;
+  `t:${await oidOf(pg.query, `'public.${table}'::regclass::oid`)}`;
 
 test('a view depending on a column is linked to that column', async () => {
   const v = await find('view', 'v');
   expect(v.columnIds).toEqual([await columnId('t', 'a')]);
+  expect(v.ownerTableId).toBeNull(); // only triggers and policies have an owner
   expect(v.tableIds).toEqual([await tableId('t')]);
 });
 
@@ -82,12 +83,14 @@ test('sequences behind serial and identity columns are linked to their column; a
 test('a trigger is linked to its table and the columns in UPDATE OF', async () => {
   const trigger = await find('trigger', 'trg');
   expect(trigger.schemaId).toBeNull();
+  expect(trigger.ownerTableId).toBe(await tableId('t'));
   expect(trigger.tableIds).toEqual([await tableId('t')]);
   expect(trigger.columnIds).toEqual([await columnId('t', 'b')]);
 });
 
 test('a policy is linked to its table and the columns it uses', async () => {
   const policy = await find('policy', 'pol');
+  expect(policy.ownerTableId).toBe(await tableId('t'));
   expect(policy.tableIds).toEqual([await tableId('t')]);
   expect(policy.columnIds).toEqual([await columnId('t', 'a')]);
 });
