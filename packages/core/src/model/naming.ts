@@ -1,4 +1,5 @@
 import type { Constraint, Id, Index, SchemaModel } from './types';
+import { relationEntries } from './lookup';
 import { clipUtf8, utf8Length } from './utf8';
 
 // Postgres's NAMEDATALEN is 64 including the terminator.
@@ -77,33 +78,17 @@ export function assignNames(model: SchemaModel): SchemaModel {
   ].filter((o) => o.autoName);
   if (autos.length === 0) return model;
 
-  // Tables, indexes, views and sequences share one namespace per schema; PK/unique/exclusion
-  // names live there too. Constraint names (any kind) are a second, schema-wide namespace.
+  // Names the objects being renamed don't hold: the relation namespace (tables, indexes, views,
+  // sequences, PK/unique/exclusion names) and a second, schema-wide one for constraint names.
+  const renaming = new Set(autos.map((o) => o.id));
   const relations = new Map<Id, Set<string>>();
   const constraintNames = new Map<Id, Set<string>>();
-  const schemaOf = (tableId: Id) => model.tables[tableId]?.schemaId;
-  for (const t of Object.values(model.tables))
-    addTo(relations, t.schemaId, t.name);
-  for (const u of Object.values(model.unmodeled)) {
-    if (
-      u.schemaId &&
-      ['view', 'materialized-view', 'foreign-table', 'sequence'].includes(
-        u.kind,
-      )
-    ) {
-      addTo(relations, u.schemaId, u.name);
-    }
-  }
-  for (const i of Object.values(model.indexes)) {
-    const schemaId = schemaOf(i.tableId);
-    if (schemaId && !i.autoName) addTo(relations, schemaId, i.name);
+  for (const e of relationEntries(model)) {
+    if (!renaming.has(e.id)) addTo(relations, e.scope, e.name);
   }
   for (const c of Object.values(model.constraints)) {
-    const schemaId = schemaOf(c.tableId);
-    if (!schemaId || c.autoName) continue;
-    addTo(constraintNames, schemaId, c.name);
-    if (c.kind !== 'check' && c.kind !== 'fk')
-      addTo(relations, schemaId, c.name);
+    const schemaId = model.tables[c.tableId]?.schemaId;
+    if (schemaId && !c.autoName) addTo(constraintNames, schemaId, c.name);
   }
 
   const columnNames = (ids: Id[]) =>

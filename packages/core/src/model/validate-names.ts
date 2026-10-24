@@ -1,4 +1,5 @@
 import type { ValidationError } from './errors';
+import { relationEntries } from './lookup';
 import type { Id, SchemaModel } from './types';
 import { utf8Length } from './utf8';
 
@@ -84,36 +85,8 @@ export function validateNames(model: SchemaModel): ValidationError[] {
     errors,
   );
 
-  // Tables, indexes, sequences and views share one namespace per schema. PK, unique and
-  // exclusion constraints create an index named after the constraint, so they join it.
-  const schemaOf = (tableId: Id) => model.tables[tableId]?.schemaId;
-  const relations: (Named & { scope: Id })[] = [];
-  for (const t of tables) relations.push({ ...t, scope: t.schemaId });
-  for (const i of indexes) {
-    const scope = schemaOf(i.tableId);
-    if (scope) relations.push({ ...i, scope });
-  }
-  for (const c of constraints) {
-    const scope = schemaOf(c.tableId);
-    if (
-      scope &&
-      (c.kind === 'pk' || c.kind === 'unique' || c.kind === 'exclusion')
-    ) {
-      relations.push({ ...c, scope });
-    }
-  }
-  for (const u of Object.values(model.unmodeled)) {
-    if (
-      u.schemaId &&
-      ['view', 'materialized-view', 'foreign-table', 'sequence'].includes(
-        u.kind,
-      )
-    ) {
-      relations.push({ ...u, scope: u.schemaId });
-    }
-  }
   checkUnique(
-    relations,
+    relationEntries(model),
     'table, index, view or sequence in this schema',
     errors,
   );
