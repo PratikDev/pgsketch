@@ -8,3 +8,4 @@ export type { Introspection } from './introspect';
 export type { Query, QueryParam } from './introspect/query';
 export type { CastData } from './sql/coercion';
 export type { ChangeOp, CommentTarget, DiffPart } from './diff/ops';
+export { diff } from './diff';
