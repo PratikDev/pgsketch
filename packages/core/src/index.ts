@@ -11,3 +11,5 @@ export type { ChangeOp, CommentTarget, DiffPart } from './diff/ops';
 export { diff } from './diff';
 export { orderOps } from './order/order';
 export type { OrderedOp, Phase } from './order/order';
+export { renderMigration } from './render/migration';
+export type { Migration, MigrationContext } from './render/migration';
