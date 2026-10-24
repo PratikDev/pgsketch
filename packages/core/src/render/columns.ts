@@ -1,6 +1,9 @@
+import type { ChangeOp } from '../diff/ops';
 import type { Column } from '../model/types';
+import { needsUsing } from '../sql/coercion';
 import { renderPgType } from '../sql/pgtype';
 import { quoteIdent } from '../sql/quote';
+import { columnName, tableRef, type RenderContext } from './names';
 
 /**
  * A column as it appears in `CREATE TABLE` or `ADD COLUMN`. An identity column is NOT NULL by
@@ -15,4 +18,85 @@ export function columnDefinition(column: Column): string {
   if (column.notNull && !column.identity) parts.push('NOT NULL');
   if (column.default) parts.push(`DEFAULT ${column.default.expression}`);
   return parts.join(' ');
+}
+
+type ColumnOp = Extract<
+  ChangeOp,
+  {
+    kind:
+      | 'addColumn'
+      | 'renameColumn'
+      | 'alterColumnType'
+      | 'setNotNull'
+      | 'dropNotNull'
+      | 'setDefault'
+      | 'dropDefault'
+      | 'dropColumn';
+  }
+>;
+
+/**
+ * These all run after the renames, so tables and columns are written with their new names; a
+ * dropped column keeps the name it had. A type change gets `USING col::type` only when Postgres
+ * has no implicit or assignment conversion, because an explicit cast would, for example, truncate
+ * a too-long string silently where the assignment cast raises an error.
+ */
+export function renderColumnOp(op: ColumnOp, context: RenderContext): string[] {
+  const alter = (tableId: string) =>
+    `ALTER TABLE ${tableRef(context, tableId)}`;
+  switch (op.kind) {
+    case 'addColumn':
+      return [
+        `${alter(op.column.tableId)} ADD COLUMN ${columnDefinition(op.column)}`,
+      ];
+    case 'renameColumn': {
+      const tableId = context.desired.columns[op.columnId]?.tableId;
+      if (!tableId) throw new Error(`Unknown column ${op.columnId}`);
+      return [
+        `${alter(tableId)} RENAME COLUMN ${quoteIdent(op.from)} TO ${quoteIdent(op.to)}`,
+      ];
+    }
+    case 'dropColumn':
+      return [
+        `${alter(op.column.tableId)} DROP COLUMN ${quoteIdent(op.column.name)}`,
+      ];
+    case 'alterColumnType': {
+      const column = alterTarget(op.columnId, context);
+      const type = renderPgType(op.to);
+      const using = needsUsing(op.from, op.to, context.casts)
+        ? ` USING ${column.name}::${type}`
+        : '';
+      return [
+        `${alter(column.tableId)} ALTER COLUMN ${column.name} TYPE ${type}${using}`,
+      ];
+    }
+    case 'setNotNull':
+    case 'dropNotNull':
+    case 'setDefault':
+    case 'dropDefault': {
+      const column = alterTarget(op.columnId, context);
+      const change =
+        op.kind === 'setNotNull'
+          ? 'SET NOT NULL'
+          : op.kind === 'dropNotNull'
+            ? 'DROP NOT NULL'
+            : op.kind === 'setDefault'
+              ? `SET DEFAULT ${op.to.expression}`
+              : 'DROP DEFAULT';
+      return [`${alter(column.tableId)} ALTER COLUMN ${column.name} ${change}`];
+    }
+  }
+}
+
+/** The quoted name and table of a column that exists after the migration. */
+function alterTarget(
+  columnId: string,
+  context: RenderContext,
+): { name: string; tableId: string } {
+  const column = context.desired.columns[columnId];
+  if (!column) throw new Error(`Unknown column ${columnId}`);
+  return {
+    name: quoteIdent(columnName(context, columnId)),
+    tableId: column.tableId,
+  };
 }
