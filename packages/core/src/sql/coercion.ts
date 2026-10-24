@@ -14,8 +14,12 @@ export const typeKey = (type: PgType): string =>
   type.schema === undefined ? type.name : `${type.schema}.${type.name}`;
 
 function baseKey(key: string, data: CastData): string {
-  for (let seen = 0; data.domains[key] !== undefined && seen < 32; seen++)
-    key = data.domains[key]!;
+  for (
+    let base = data.domains[key];
+    base !== undefined;
+    base = data.domains[key]
+  )
+    key = base;
   return key;
 }
 

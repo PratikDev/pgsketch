@@ -62,8 +62,9 @@ SELECT md5(concat_ws('#',
 )) AS fingerprint`;
 
 export async function fingerprint(query: Query): Promise<string> {
-  const rows = await query<{ fingerprint: string }>(FINGERPRINT_SQL);
-  return rows[0]!.fingerprint;
+  const [row] = await query<{ fingerprint: string }>(FINGERPRINT_SQL);
+  if (!row) throw new Error('The fingerprint query returned no row');
+  return row.fingerprint;
 }
 
 /** The catalog tables (from the database's own list) whose names appear in any of the SQL texts. */

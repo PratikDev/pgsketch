@@ -1,8 +1,9 @@
 export function utf8Length(text: string): number {
   let bytes = 0;
   for (const char of text) {
-    const code = char.codePointAt(0)!;
-    bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+    // a character outside the BMP is a surrogate pair (two UTF-16 units) and takes 4 bytes
+    const unit = char.charCodeAt(0);
+    bytes += char.length === 2 ? 4 : unit < 0x80 ? 1 : unit < 0x800 ? 2 : 3;
   }
   return bytes;
 }
