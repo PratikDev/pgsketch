@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 import { introspectConstraints } from '../src/introspect/constraints';
 import { withSnapshot } from '../src/introspect/query';
 import type { Constraint } from '../src/model/types';
-import { startPostgres, type TestPostgres } from './pg';
+import { oidOf, startPostgres, type TestPostgres } from './pg';
 
 let pg: TestPostgres;
 const major = () => Number(pg.version);
@@ -80,13 +80,7 @@ test('every foreign key action is read', async () => {
 });
 
 test('NOT NULL columns produce no constraint objects (also on Postgres 18)', async () => {
-  const oid = Number(
-    (
-      await pg.query<{ oid: number | string }>(
-        `SELECT 'public.only_not_null'::regclass::oid AS oid`,
-      )
-    )[0]!.oid,
-  );
+  const oid = await oidOf(pg.query, `'public.only_not_null'::regclass::oid`);
   expect((await all()).filter((c) => c.tableId === `t:${oid}`)).toEqual([]);
   if (major() >= 18) {
     const rows = await pg.query(

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { introspectColumns } from '../src/introspect/columns';
 import { withSnapshot } from '../src/introspect/query';
-import { startPostgres, type TestPostgres } from './pg';
+import { oidOf, startPostgres, type TestPostgres } from './pg';
 
 let pg: TestPostgres;
 const isPg18 = () => Number(pg.version) >= 18;
@@ -38,13 +38,7 @@ afterAll(async () => {
 
 const columnsOf = async (table: string) => {
   const all = await withSnapshot(pg.query, () => introspectColumns(pg.query));
-  const oid = Number(
-    (
-      await pg.query<{ oid: number | string }>(
-        `SELECT '${table}'::regclass::oid AS oid`,
-      )
-    )[0]!.oid,
-  );
+  const oid = await oidOf(pg.query, `'${table}'::regclass::oid`);
   return Object.fromEntries(
     all.filter((c) => c.tableId === `t:${oid}`).map((c) => [c.name, c]),
   );

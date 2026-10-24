@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { schemaId } from '../src/model/ids';
 import { introspectSchemas } from '../src/introspect/schemas';
-import { startPostgres, type TestPostgres } from './pg';
+import { oidOf, startPostgres, type TestPostgres } from './pg';
 
 let pg: TestPostgres;
 
@@ -27,12 +27,9 @@ afterAll(async () => {
 test('user schemas are returned with names and ids', async () => {
   const schemas = await introspectSchemas(pg.query);
   expect(schemas.map((s) => s.name)).toEqual(['My Schema', 'app', 'public']);
-  const oid = Number(
-    (
-      await pg.query<{ oid: number | string }>(
-        `SELECT oid FROM pg_namespace WHERE nspname = 'app'`,
-      )
-    )[0]!.oid,
+  const oid = await oidOf(
+    pg.query,
+    `(SELECT oid FROM pg_namespace WHERE nspname = 'app')`,
   );
   expect(schemas.find((s) => s.name === 'app')!.id).toBe(schemaId(oid));
 });

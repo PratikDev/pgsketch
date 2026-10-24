@@ -3,7 +3,7 @@ import {
   listExtensionOwned,
   notExtensionOwned,
 } from '../src/introspect/extensions';
-import { startPostgres, type TestPostgres } from './pg';
+import { oidOf, startPostgres, type TestPostgres } from './pg';
 
 let pg: TestPostgres;
 
@@ -21,11 +21,6 @@ afterAll(async () => {
   await pg?.stop();
 });
 
-const oidOf = async (expr: string) =>
-  Number(
-    (await pg.query<{ oid: number | string }>(`SELECT ${expr} AS oid`))[0]!.oid,
-  );
-
 test('after CREATE EXTENSION pg_trgm its objects are listed', async () => {
   const owned = await listExtensionOwned(pg.query);
   const has = (catalog: string, oid: number) =>
@@ -33,20 +28,23 @@ test('after CREATE EXTENSION pg_trgm its objects are listed', async () => {
   expect(
     has(
       'pg_proc',
-      await oidOf(`'public.similarity(text,text)'::regprocedure::oid`),
+      await oidOf(
+        pg.query,
+        `'public.similarity(text,text)'::regprocedure::oid`,
+      ),
     ),
   ).toBe(true);
-  expect(has('pg_type', await oidOf(`'public.gtrgm'::regtype::oid`))).toBe(
-    true,
-  );
   expect(
-    has('pg_class', await oidOf(`'public.ext_table'::regclass::oid`)),
+    has('pg_type', await oidOf(pg.query, `'public.gtrgm'::regtype::oid`)),
+  ).toBe(true);
+  expect(
+    has('pg_class', await oidOf(pg.query, `'public.ext_table'::regclass::oid`)),
   ).toBe(true);
 });
 
 test('objects that are not part of an extension are not listed', async () => {
   const owned = await listExtensionOwned(pg.query);
-  const userTable = await oidOf(`'public.user_table'::regclass::oid`);
+  const userTable = await oidOf(pg.query, `'public.user_table'::regclass::oid`);
   expect(
     owned.some((o) => o.catalog === 'pg_class' && o.oid === userTable),
   ).toBe(false);

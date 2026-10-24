@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { introspectEnums } from '../src/introspect/enums';
 import { enumId, schemaId } from '../src/model/ids';
-import { startPostgres, type TestPostgres } from './pg';
+import { oidOf, startPostgres, type TestPostgres } from './pg';
 
 let pg: TestPostgres;
 
@@ -40,12 +40,9 @@ test('labels are returned in enumsortorder, not creation order', async () => {
 test('the same enum name in two schemas gives two enums with the right schema ids', async () => {
   const moods = (await enums()).filter((e) => e.name === 'mood');
   expect(moods).toHaveLength(2);
-  const app = Number(
-    (
-      await pg.query<{ oid: number | string }>(
-        `SELECT oid FROM pg_namespace WHERE nspname = 'app'`,
-      )
-    )[0]!.oid,
+  const app = await oidOf(
+    pg.query,
+    `(SELECT oid FROM pg_namespace WHERE nspname = 'app')`,
   );
   expect(moods.find((e) => e.labels.join() === 'a')!.schemaId).toBe(
     schemaId(app),
@@ -63,13 +60,7 @@ test('labels with spaces, quotes and unicode survive; an empty enum has no label
 });
 
 test('ids come from the type oid', async () => {
-  const oid = Number(
-    (
-      await pg.query<{ oid: number | string }>(
-        `SELECT 'public."Odd Name"'::regtype::oid AS oid`,
-      )
-    )[0]!.oid,
-  );
+  const oid = await oidOf(pg.query, `'public."Odd Name"'::regtype::oid`);
   expect((await enums()).find((e) => e.name === 'Odd Name')!.id).toBe(
     enumId(oid),
   );

@@ -32,3 +32,10 @@ export async function startPostgres(): Promise<TestPostgres> {
     },
   };
 }
+
+/** The oid an expression like `'public.t'::regclass::oid` evaluates to. */
+export async function oidOf(query: Query, expr: string): Promise<number> {
+  const [row] = await query<{ oid: number | string }>(`SELECT ${expr} AS oid`);
+  if (!row) throw new Error(`No oid for ${expr}`);
+  return Number(row.oid);
+}

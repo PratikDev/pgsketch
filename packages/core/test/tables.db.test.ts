@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
 import { schemaId, tableId } from '../src/model/ids';
 import { introspectTables } from '../src/introspect/tables';
-import { startPostgres, type TestPostgres } from './pg';
+import { oidOf, startPostgres, type TestPostgres } from './pg';
 
 let pg: TestPostgres;
 
@@ -50,19 +50,14 @@ test('ids and schemas come from OIDs; same name in two schemas gives two tables'
   const same = all.filter((x) => x.name === 'same_name');
   expect(same).toHaveLength(2);
   expect(new Set(same.map((x) => x.id)).size).toBe(2);
-  const { oid } = (
-    await pg.query<{ oid: number | string }>(
-      `SELECT 'public.plain'::regclass::oid AS oid`,
-    )
-  )[0]!;
-  const { s } = (
-    await pg.query<{ s: number | string }>(
-      `SELECT oid AS s FROM pg_namespace WHERE nspname = 'public'`,
-    )
-  )[0]!;
+  const table = await oidOf(pg.query, `'public.plain'::regclass::oid`);
+  const schema = await oidOf(
+    pg.query,
+    `(SELECT oid FROM pg_namespace WHERE nspname = 'public')`,
+  );
   expect(all.find((x) => x.name === 'plain')).toMatchObject({
-    id: tableId(oid!),
-    schemaId: schemaId(s!),
+    id: tableId(table),
+    schemaId: schemaId(schema),
   });
 });
 
