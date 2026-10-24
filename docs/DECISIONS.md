@@ -345,3 +345,35 @@ A generated column that depends on a dropped column is not detected (the model d
 One `Oid` type (exported from `model/ids.ts`) replaces five copies. `relationEntries` in `model/lookup.ts` is the single list of what takes a name in a schema's relation namespace, used by name validation and by auto-naming. The five non-null assertions in `src` are gone: `baseKey` and `utf8Length` no longer need them, the FK rebuild check, the fingerprint query and the unmodeled-object mapping handle the empty case explicitly. The guards for impossible cases are gone too: a cap on domain chains (Postgres forbids cycles) and a fallback for unknown foreign key action codes, which are now a closed type. Tests share an `oidOf` helper and a diff-part runner.
 
 **Rationale:** `AGENTS.md` asks for no duplicated logic, no assertions that bypass the type checker and no handling for impossible cases. Behavior is unchanged: the unit tests are identical and the DB tests are the same files.
+
+## Rendering works from the two models, not from names inside the operations
+
+**Date & time:** 2026-10-24 12:03 (F1/F3)
+
+`orderOps` and the renderers take a `ModelPair` (`{ baseline, desired }`) next to the operations and look names up there. The plan's `render(ops, risks, context)` lists only the timestamp, database name and cast data in `context`, but operations carry ids, so something has to resolve schema, table and column names. The alternative was to put names in every operation; that would have changed all the E-phase operations.
+
+**Rationale:** smallest change that makes qualified names available. Schema names come from the edited model (it has every schema, including ones created in the same migration); a table that exists before the migration is found in the loaded one.
+
+## Operation order is phase, then name, with a fixed tie-break
+
+**Date & time:** 2026-10-24 12:03 (F1)
+
+`orderOps` puts each operation in one of the plan's twelve phases (all foreign key drops in 2, other drops in 3, foreign key adds in 11), then sorts by group, qualified name, step and finally operation kind. Renames run tables, columns, constraints, then indexes. One column's statements run as type, default, nullability and stay together. The name is only a sort key (`schema.table.column`).
+
+**Rationale:** the plan asks for byte-identical SQL for identical changes. The operation-kind tie-break was added after a shuffle test found two operations on one column with the same key and a different order depending on the input.
+
+## Renderers return statements without a trailing semicolon
+
+**Date & time:** 2026-10-24 12:03 (F2/F3)
+
+Each renderer returns `string[]`, one statement per entry and no `;`. The migration text (F7) adds the separators, and Validate can send each entry as one message.
+
+**Rationale:** one operation can need more than one statement (later phases), and Validate sends them one at a time.
+
+## Table statements: identity implies NOT NULL, DROP has no CASCADE
+
+**Date & time:** 2026-10-24 12:03 (F3)
+
+`columnDefinition` (in `render/columns.ts`, shared with F4's `ADD COLUMN`) leaves out `NOT NULL` on identity columns, since they are NOT NULL by themselves, and writes defaults as the normalized expression text. `CREATE TABLE` carries the columns and the primary key only. `DROP TABLE` has no `CASCADE`. A DB test runs the rendered schema, create, rename and drop statements on Postgres 14, 16 and 18 and checks what introspection finds.
+
+**Rationale:** anything that depended on the table was dropped or blocked earlier, so a failing DROP means something was missed, and CASCADE would hide it.
