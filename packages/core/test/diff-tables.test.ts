@@ -1,13 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import { diffTables } from '../src/diff/tables';
 import type { Table } from '../src/model/types';
-import { edit } from './diff-helpers';
+import { partRunner } from './diff-helpers';
 import { fixtureModel } from './fixtures/model';
 
-const run = (change: Parameters<typeof edit>[0]) => {
-  const { baseline, desired } = edit(change);
-  return diffTables(baseline, desired);
-};
+const run = partRunner(diffTables);
 
 const newTable = (over: Partial<Table> = {}): Table => ({
   id: 'new-t',

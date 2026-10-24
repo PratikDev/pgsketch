@@ -1,11 +1,8 @@
 import { expect, test } from 'vitest';
 import { diffSchemas } from '../src/diff/schemas';
-import { edit } from './diff-helpers';
+import { partRunner } from './diff-helpers';
 
-const run = (change: Parameters<typeof edit>[0]) => {
-  const { baseline, desired } = edit(change);
-  return diffSchemas(baseline, desired);
-};
+const run = partRunner(diffSchemas);
 
 test('no edits, no operations', () => {
   expect(run(() => {})).toEqual({ ops: [], errors: [] });
