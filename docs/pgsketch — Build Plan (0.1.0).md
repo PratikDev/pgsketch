@@ -716,9 +716,9 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| F1 | Phase assignment and deterministic sort | `order/order.ts` | FK added after its target table; same input gives identical order | todo |
-| F2 | Render schema statements | `render/schemas.ts` | Snapshot of `CREATE SCHEMA` | todo |
-| F3 | Render table statements | `render/tables.ts` | Snapshot: create with identity PK, rename, drop | todo |
+| F1 | Phase assignment and deterministic sort | `order/order.ts` | FK added after its target table; same input gives identical order | done |
+| F2 | Render schema statements | `render/schemas.ts` | Snapshot of `CREATE SCHEMA` | done |
+| F3 | Render table statements | `render/tables.ts` | Snapshot: create with identity PK, rename, drop | done |
 | F4 | Render column statements; `USING` only where the coercion rules find no assignment conversion | `render/columns.ts` | Snapshot: `text → integer` includes `USING`; `varchar(50) → varchar(20)` doesn't | todo |
 | F5 | Render constraint and index statements, including renames | `render/constraints.ts`, `render/indexes.ts` | Snapshot: composite FK with actions; index rename | todo |
 | F6 | Render comment statements | `render/comments.ts` | Snapshot with a quote inside the comment | todo |
