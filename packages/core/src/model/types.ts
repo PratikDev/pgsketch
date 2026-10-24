@@ -147,3 +147,9 @@ export interface SchemaModel {
   enums: Record<Id, EnumType>;
   unmodeled: Record<Id, UnmodeledObject>;
 }
+
+/** The schema as it was loaded and as the user edited it: what a migration goes from and to. */
+export interface ModelPair {
+  baseline: SchemaModel;
+  desired: SchemaModel;
+}

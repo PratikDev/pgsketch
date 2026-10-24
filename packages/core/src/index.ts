@@ -9,3 +9,5 @@ export type { Query, QueryParam } from './introspect/query';
 export type { CastData } from './sql/coercion';
 export type { ChangeOp, CommentTarget, DiffPart } from './diff/ops';
 export { diff } from './diff';
+export { orderOps } from './order/order';
+export type { OrderedOp, Phase } from './order/order';
