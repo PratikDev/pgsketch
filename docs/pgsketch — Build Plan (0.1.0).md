@@ -705,12 +705,12 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | E3 | Tables: create, rename, drop; schema change on an existing table is a blocking error | `diff/tables.ts` | Renamed table keeps its ID and yields `renameTable`, not drop + create | done |
 | E4 | Columns: add (including identity on new columns), drop, rename | `diff/columns.ts` | Same identity check for columns | done |
 | E5 | Columns: type, NOT NULL, default changes | `diff/columns.ts` | One op per changed property | done |
-| E6 | Constraints: add, drop, rename; changed = drop + add; self-referencing FKs | `diff/constraints.ts` | Changed FK action yields drop + add; renamed constraint yields `renameConstraint` | todo |
-| E7 | Indexes: same rules as constraints | `diff/indexes.ts` | Column order change yields drop + add; rename yields `renameIndex` | todo |
-| E8 | Comments on tables and columns | `diff/comments.ts` | Set, change, clear | todo |
-| E9 | Read-only guard: block changes that would drop dependent read-only objects | `diff/readonly-guard.ts` | Dropping a column used by a view or by a read-only FK on another table returns a blocking error, no op; a partial index on the same table is dropped and flagged destructive | todo |
-| E10 | FK type-change rule: drop and re-add only when both sides change to an incompatible in-between state | `diff/fk-type-changes.ts` | `int → bigint` on one side emits no extra ops; `uuid → text` on both sides emits drop + add | todo |
-| E11 | Assemble the diff, including dropping FKs that point at dropped tables or columns | `diff/index.ts` | Dropping a referenced table also yields `dropConstraint` for the referencing FK | todo |
+| E6 | Constraints: add, drop, rename; changed = drop + add; self-referencing FKs | `diff/constraints.ts` | Changed FK action yields drop + add; renamed constraint yields `renameConstraint` | done |
+| E7 | Indexes: same rules as constraints | `diff/indexes.ts` | Column order change yields drop + add; rename yields `renameIndex` | done |
+| E8 | Comments on tables and columns | `diff/comments.ts` | Set, change, clear | done |
+| E9 | Read-only guard: block changes that would drop dependent read-only objects | `diff/readonly-guard.ts` | Dropping a column used by a view or by a read-only FK on another table returns a blocking error, no op; a partial index on the same table is dropped and flagged destructive | done |
+| E10 | FK type-change rule: drop and re-add only when both sides change to an incompatible in-between state | `diff/fk-type-changes.ts` | `int → bigint` on one side emits no extra ops; `uuid → text` on both sides emits drop + add | done |
+| E11 | Assemble the diff, including dropping FKs that point at dropped tables or columns | `diff/index.ts` | Dropping a referenced table also yields `dropConstraint` for the referencing FK | done |
 
 ### F. Ordering and SQL rendering
 
