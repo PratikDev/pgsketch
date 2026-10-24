@@ -1,8 +1,7 @@
+import type { Oid } from '../model/ids';
 import { parsePgType } from '../sql/pgtype';
 import { typeKey, type CastData } from '../sql/coercion';
 import type { Query } from './query';
-
-type Oid = number | string;
 
 export interface TypeRow {
   oid: Oid;

@@ -27,7 +27,10 @@ const row = (over: Partial<ConstraintRow> = {}): ConstraintRow => ({
 });
 
 test('each foreign key action maps', () => {
-  const fk = (del: string, upd: string) =>
+  const fk = (
+    del: ConstraintRow['del_action'],
+    upd: ConstraintRow['upd_action'],
+  ) =>
     toConstraint(
       row({
         kind: 'f',

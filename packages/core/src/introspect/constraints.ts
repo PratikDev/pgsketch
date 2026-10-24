@@ -1,10 +1,9 @@
 import { columnId, constraintId, tableId } from '../model/ids';
+import type { Oid } from '../model/ids';
 import type { Constraint, FkAction, Id, ReadOnlyReason } from '../model/types';
 import { indexReasonSql } from './indexes';
 import type { Query } from './query';
 import { tableReasonSql, userTableSql } from './tables';
-
-type Oid = number | string;
 
 export interface ConstraintRow {
   oid: Oid;
@@ -14,8 +13,8 @@ export interface ConstraintRow {
   key_attnums: number[] | null;
   ref_table_oid: Oid;
   ref_attnums: number[] | null;
-  del_action: string;
-  upd_action: string;
+  del_action: ActionCode;
+  upd_action: ActionCode;
   match_type: string;
   deferrable: boolean;
   validated: boolean;
@@ -28,7 +27,9 @@ export interface ConstraintRow {
   index_reason: ReadOnlyReason | null;
 }
 
-const ACTIONS: Record<string, FkAction> = {
+type ActionCode = 'a' | 'r' | 'c' | 'n' | 'd';
+
+const ACTIONS: Record<ActionCode, FkAction> = {
   a: 'no action',
   r: 'restrict',
   c: 'cascade',
@@ -78,8 +79,8 @@ export function toConstraint(row: ConstraintRow): Constraint {
         refColumnIds: (row.ref_attnums ?? []).map((n): Id =>
           columnId(row.ref_table_oid, n),
         ),
-        onDelete: ACTIONS[row.del_action] ?? 'no action',
-        onUpdate: ACTIONS[row.upd_action] ?? 'no action',
+        onDelete: ACTIONS[row.del_action],
+        onUpdate: ACTIONS[row.upd_action],
       };
   }
 }

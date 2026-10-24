@@ -1,6 +1,6 @@
 import type { Id, UnmodeledKind } from './types';
 
-type Oid = number | string;
+export type Oid = number | string;
 
 // Core runs in both the renderer and Node, so it uses the global rather than `node:crypto`.
 declare const crypto: { randomUUID(): string };

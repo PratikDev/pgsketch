@@ -1,9 +1,8 @@
 import { columnId, indexId, tableId } from '../model/ids';
+import type { Oid } from '../model/ids';
 import type { Index, ReadOnlyReason } from '../model/types';
 import type { Query } from './query';
 import { tableReasonSql, userTableSql } from './tables';
-
-type Oid = number | string;
 
 /**
  * SQL for why an index is read-only (or NULL), judged by what it contains: pgsketch only models
