@@ -13,3 +13,5 @@ export { orderOps } from './order/order';
 export type { OrderedOp, Phase } from './order/order';
 export { renderMigration } from './render/migration';
 export type { Migration, MigrationContext } from './render/migration';
+export { classifyTypeChange } from './risk/type-changes';
+export type { TypeChangeRisk } from './risk/type-changes';
