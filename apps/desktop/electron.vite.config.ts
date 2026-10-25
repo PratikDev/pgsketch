@@ -5,7 +5,8 @@ import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   main: {},
-  preload: {},
+  // a sandboxed preload can't require packages, so zod is bundled into it
+  preload: { build: { externalizeDeps: false } },
   renderer: {
     resolve: {
       alias: {
