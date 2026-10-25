@@ -433,3 +433,50 @@ A unit test goes through every ordered pair of 20 common types and requires exac
 `renderMigration(ops, context)` calls `assessRisk` for each operation, so there is no `risks` parameter (the plan's `render(ops, risks, context)`): a caller can't pass risks that don't match the operations, and the context already holds the loaded model. Each risk becomes a `-- WARNING (<level>): <message>` line above the first statement of its operation, in the order `assessRisk` returns them. The header gets a `-- Risks:` line counting risks (not operations) from worst to least, for example `3 destructive, 3 may fail, 2 breaks app code, 4 locks or slow`, or `none`. Warnings are only in the text; the statement list for Validate stays plain SQL. Line breaks in a message are replaced by spaces, because a message can contain a table or column name.
 
 **Rationale:** the file is something the user reads and runs, so the dangerous statements should be marked where they are, and an object name must not be able to end a comment line and start SQL.
+
+## Models are compared by names, and the first difference is reported as a sentence
+
+**Date & time:** 2026-10-25 20:03 (H1)
+
+`firstDifference(actual, expected)` turns each model into a list of objects keyed by qualified name (`schema "app"`, `column "app"."users"."id"`, `constraint …`, `index "app"."name"`) with everything about the object except its id, then compares them in the order of `expected`: schemas, enums, tables with their columns, constraints, indexes, then anything extra. It returns `Missing …`, `Different … expected … found …` or `Unexpected …`, or `null`; `matchesByName` is the boolean. Columns are compared as a list in table order plus each column's own facts, not by position number. A default is compared by its SQL text only, so a preset and a typed-in expression with the same text match, as in the diff. Read-only reasons and the saved `definition` of read-only constraints and indexes are compared too. Unmodeled objects are ignored. Names are only for display, so building them never throws on a half-edited model.
+
+**Rationale:** the plan asks for this comparison by name and definition, with the first difference named. An extra column shows up as a difference in the table's column order rather than as "unexpected column", because the order fact is checked first; the message still names the table and lists both orders. Expressions are compared as written: normalizing them is phase H4.
+
+## Round-trip tests: shared edit helpers, one database per case, and the invariant they check
+
+**Date & time:** 2026-10-25 20:03 (H2, H3)
+
+`test/edits.ts` holds `applyEdit`, which changes a model by names the way the editor will (add or drop a schema, table, column, key, index or foreign key, rename, retype, comment). It also does what the editor will do around an edit: dropping a column or table removes the constraints and indexes that use it and the foreign keys that point at it, identity and key columns become NOT NULL, new constraints and indexes are auto-named. `test/roundtrip.ts` runs one case: it creates a fresh database, runs the setup SQL, loads the schema, lets the test edit a copy, runs `assignNames`, validates, diffs, renders, runs the whole migration text in one go, loads the schema again and compares with `firstDifference`. A migration Postgres rejects, or edits that fail validation, throw with the SQL included. `test/roundtrip.db.test.ts` has 33 hand-written cases, and `test/roundtrip-property.db.test.ts` runs the same helper on random schemas and edits.
+
+**Rationale:** the cascade and coupling rules belong to the editor stores (phases K4 and K7), which don't exist yet; the tests need them now to produce edits the editor could make. When the stores are built they should share this logic with `edits.ts` or replace it. A fresh database per case (`CREATE DATABASE`, dropped after) keeps cases independent without a container each.
+
+## The property test: random schemas, edits chosen against the current model, runs set by an environment variable
+
+**Date & time:** 2026-10-25 20:03 (H3)
+
+`test/arbitraries.ts` draws a starting schema (one to four tables in `app` with one to five columns, optional primary key, unique constraint, index, identity, default, and a foreign key to an earlier table's key) and one to six edit intents. An intent doesn't name its target: three numbers choose among whatever exists when it is applied, so any intent list works on any schema and shrinks well. An intent with nothing to act on is skipped, and so is one that leaves the model invalid. `PGSKETCH_PROPERTY_RUNS` sets the number of runs (default 200; the nightly run will use 2,000), and `PGSKETCH_PROPERTY_SEED` with `PGSKETCH_PROPERTY_PATH` replays a failure. Types are limited to ones that can be converted into each other with `USING` on empty tables, defaults to values Postgres prints back unchanged, and a default is only kept across a type change inside the numbers. Not generated yet: check constraints, enums, read-only objects, turning identity on or off, and renames that take a name another rename is giving up (see below).
+
+**Rationale:** normalization (H4, H5) isn't built, so the generator only produces expressions that need none. Rows aren't generated, so migrations that depend on data (NOT NULL, unique, USING casts) can't fail on it; that is covered by the hand-written cases and the G tests.
+
+## What the round-trip tests found in core, and how it was fixed
+
+**Date & time:** 2026-10-25 20:03 (H2, H3)
+
+The property test failed on valid edits several times; each was reproduced as a fixed case and fixed in core.
+
+- **Drops go before renames and new objects.** Phases are now: create schemas, drop foreign keys, drop other constraints and indexes, drop columns, drop tables, renames, create tables, add columns, alter columns, add constraints and indexes, add foreign keys, comments. Before, dropping a table and creating another with its name, dropping a column and adding or renaming another to its name, all failed with "already exists". `DROP COLUMN` is now written with the table's loaded name, since it runs before the table's rename.
+- **New columns are added in the order of their positions**, not by name, so the table's column order after the migration is the edited one.
+- **A default that is replaced while the type changes is dropped first and set again after.** Postgres casts the old default to the new type, which fails for a default that can't be cast (a text default on a column becoming an integer). Within a column the order is now drop default, type, set default, nullability.
+- **A foreign key on a dropped table is dropped explicitly when it points at another table.** The table, key or column it points at may be dropped earlier than the table that owns the key, and Postgres refuses. A self-reference needs nothing.
+- **A foreign key is rebuilt when a primary or unique key over its referenced columns is dropped or changed** (for example a primary key replaced by a unique constraint), since Postgres won't drop a key while a foreign key uses it. This is a new diff part, `diffFkKeyChanges`, next to the type-change rebuild; a foreign key already rebuilt for its types, or whose target is gone, is left to those.
+- **Introspection listed too few indexes:** a unique index that a foreign key relies on was hidden because the query skipped any index named by `pg_constraint.conindid`, which a foreign key also sets. Only primary key, unique and exclusion constraints own their index.
+
+**Rationale:** these are bugs in the plan's ordering and diff rules (the plan assumed table drops need no ordering because every foreign key was dropped earlier, and didn't cover names being freed). The plan's operation-order section is updated to match.
+
+## Known limit: a rename that takes a name another rename is giving up
+
+**Date & time:** 2026-10-25 20:03 (H3)
+
+Renames run in name order, so renaming table `a` to `b` while `b` is renamed to `c` fails with "already exists", and swapping two names can't work without a temporary one. The same holds for columns, constraints and indexes. This is not handled in 0.1.0: the property generator avoids such renames (`heldByRenamed` in `test/arbitraries.ts`, marked with a `shortcut:` comment), and Validate shows the Postgres error before anything runs.
+
+**Rationale:** ordering renames by dependency is small, but swaps need a temporary name and extra statements and warnings, which is a change of its own. A later phase can order renames by what they free and break swaps with a temporary name.
