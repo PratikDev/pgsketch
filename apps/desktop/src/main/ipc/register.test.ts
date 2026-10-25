@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
+import { testDeps } from './test-deps';
 import { fakeIpc } from './fake-ipc';
 import { registerAllIpc } from './index';
 import { IpcValidationError, registerIpc } from './register';
@@ -73,10 +74,12 @@ describe('registerIpc', () => {
 describe('registerAllIpc', () => {
   test('registers every domain once, including ping', async () => {
     const ipc = fakeIpc();
-    registerAllIpc(ipc);
+    registerAllIpc(ipc, testDeps().deps);
     expect(await ipc.invoke('app.ping', { message: 'pong' })).toEqual({
       message: 'pong',
     });
-    expect(() => registerAllIpc(ipc)).toThrow('second handler');
+    expect(() => registerAllIpc(ipc, testDeps().deps)).toThrow(
+      'second handler',
+    );
   });
 });

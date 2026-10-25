@@ -139,7 +139,18 @@ export interface SessionInfo {
   hostKind: 'local' | 'remote' | 'socket';
   /** Identifies this database for drafts and layouts. */
   dbKey: string;
+  /** The saved connection this session is, or was just saved as; null when it isn't saved. */
+  saved: {
+    connectionId: string;
+    /** A password was given but couldn't be kept, because there is no system keyring. */
+    passwordNotSaved: boolean;
+  } | null;
 }
+
+/** Opening a database either gives a session or a message that can be shown as it is. */
+export type OpenResult =
+  | { status: 'opened'; session: SessionInfo }
+  | { status: 'failed'; message: string };
 
 /** A remembered connection; the password is never part of it. */
 export interface SavedConnection {
@@ -175,8 +186,8 @@ export interface IpcResults {
   'app.ping': { message: string };
   'connection.defaults': ConnectionDefaults;
   'connection.test': ConnectionTestResult;
-  'connection.open': SessionInfo;
-  'connection.openSaved': SessionInfo;
+  'connection.open': OpenResult;
+  'connection.openSaved': OpenResult;
   'connection.close': void;
   'connection.recent': SavedConnection[];
   'connection.forget': void;

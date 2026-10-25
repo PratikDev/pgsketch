@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
+import { testDeps } from '../main/ipc/test-deps';
 import { fakeIpc } from '../main/ipc/fake-ipc';
 import { registerAllIpc } from '../main/ipc';
 import { createApi } from './api';
@@ -6,7 +7,7 @@ import { createApi } from './api';
 describe('the bridge', () => {
   test('a call goes through the preload to main and back', async () => {
     const ipc = fakeIpc();
-    registerAllIpc(ipc);
+    registerAllIpc(ipc, testDeps().deps);
     const api = createApi(ipc);
     expect(await api.invoke('app.ping', { message: 'hello' })).toEqual({
       message: 'hello',
@@ -15,7 +16,7 @@ describe('the bridge', () => {
 
   test('main rejects a payload that does not match, through the bridge too', async () => {
     const ipc = fakeIpc();
-    registerAllIpc(ipc);
+    registerAllIpc(ipc, testDeps().deps);
     const api = createApi(ipc);
     // @ts-expect-error the types stop this; a renderer that ignores them still meets the schema
     await expect(api.invoke('app.ping', { message: 1 })).rejects.toThrow(
