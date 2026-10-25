@@ -33,15 +33,15 @@ const TIME_TYPES = ['timestamptz', 'date'];
 const TYPE_GROUPS = [CONVERTIBLE_TYPES, TIME_TYPES, ['boolean']];
 const ALL_TYPES = TYPE_GROUPS.flat();
 const INTEGER_TYPES = ['smallint', 'integer', 'bigint'];
+const TEXT_TYPES = ['text', 'varchar(20)', 'varchar(40)'];
 const NUMBER_TYPES = [...INTEGER_TYPES, 'numeric(10,2)', 'numeric(12,4)'];
 
-/** A default in the form Postgres prints it back, or none for a type that has no simple one. */
-export function defaultFor(type: string): string | undefined {
-  if (type === 'boolean') return 'true';
-  if (type === 'text') return "'abc'::text";
-  if (type.startsWith('varchar')) return "'abc'::character varying";
-  if (type === 'timestamptz') return 'now()';
-  if (type === 'date') return 'CURRENT_DATE';
+/** A default as a user would type it; the round trip has Postgres normalize it. */
+export function defaultFor(type: string): string {
+  if (type === 'boolean') return 'TRUE';
+  if (type === 'text' || type.startsWith('varchar')) return "'abc'";
+  if (type === 'timestamptz') return 'CURRENT_TIMESTAMP';
+  if (type === 'date') return 'current_date';
   return '42';
 }
 
@@ -112,9 +112,7 @@ const columnSql = (c: ColumnDraft, isKey: boolean): string => {
     identity &&
       `GENERATED ${identity === 'always' ? 'ALWAYS' : 'BY DEFAULT'} AS IDENTITY`,
     (c.notNull || isKey || identity) && 'NOT NULL',
-    c.hasDefault && !identity && defaultFor(c.type)
-      ? `DEFAULT ${defaultFor(c.type)}`
-      : false,
+    c.hasDefault && !identity && `DEFAULT ${defaultFor(c.type)}`,
   ]
     .filter(Boolean)
     .join(' ');
@@ -347,14 +345,17 @@ const RESOLVERS: Record<EditKind, Resolver> = {
   setType: (model, i) => {
     const found = pickColumn(model, i, (c) => c.identity === null);
     const from = found && typeOf(found.column);
-    // a default stays as written, so it has to suit the new type too: only numbers do
+    // a default stays as typed, so it has to suit the new type: a number does, a string only
+    // suits another string type
     const candidates = TYPE_GROUPS.find(
       (g) => from && g.includes(from),
     )?.filter(
       (t) =>
         t !== from &&
         (found?.column.default == null ||
-          (NUMBER_TYPES.includes(t) && NUMBER_TYPES.includes(from!))),
+          NUMBER_TYPES.includes(from!) ||
+          (TEXT_TYPES.includes(from!) && TEXT_TYPES.includes(t)) ||
+          TIME_TYPES.includes(from!)),
     );
     const to = candidates && pickFrom(candidates, i.picks[1]);
     return found && to
@@ -399,6 +400,8 @@ const RESOLVERS: Record<EditKind, Resolver> = {
         }
       : null;
   },
+  // never generated, see NOT_GENERATED
+  addCheck: () => null,
   addUnique: (model, i) => {
     const table = pickFrom(tablesOf(model), i.picks[0]);
     const columns = table ? pickColumns(model, table, i) : [];
@@ -481,8 +484,19 @@ const RESOLVERS: Record<EditKind, Resolver> = {
   },
 };
 
+/**
+ * A check keeps its text as typed, so renaming or retyping a column it uses afterwards leaves the
+ * edited text stale, which the editor has to deal with (Postgres rewrites a stored check itself).
+ * Checks are in the hand-written round trips only.
+ */
+const NOT_GENERATED: EditKind[] = ['addCheck'];
+
 export const editIntentArb: fc.Arbitrary<EditIntent> = fc.record({
-  kind: fc.constantFrom(...(Object.keys(RESOLVERS) as EditKind[])),
+  kind: fc.constantFrom(
+    ...(Object.keys(RESOLVERS) as EditKind[]).filter(
+      (kind) => !NOT_GENERATED.includes(kind),
+    ),
+  ),
   picks: fc.tuple(fc.nat(1000), fc.nat(1000), fc.nat(1000)),
   name: fc.constantFrom(...NAMES),
   type: fc.constantFrom(...ALL_TYPES),

@@ -14,7 +14,9 @@ afterAll(async () => {
 });
 
 const SETUP = `
+  CREATE EXTENSION "uuid-ossp";
   CREATE SCHEMA app;
+  CREATE TYPE app.mood AS ENUM ('happy', 'sad');
   CREATE TABLE app.users (
     id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     email text NOT NULL,
@@ -124,6 +126,103 @@ const cases: [string, Edit[]][] = [
     [
       { kind: 'dropConstraint', table: 'app.orders', name: 'orders_pkey' },
       { kind: 'addUnique', table: 'app.orders', columns: ['id'] },
+    ],
+  ],
+  [
+    'defaults typed the way a user would: CURRENT_TIMESTAMP, a bare string, a bare number',
+    [
+      {
+        kind: 'addColumn',
+        table: 'app.orders',
+        column: {
+          name: 'placed',
+          type: 'timestamptz',
+          notNull: true,
+          default: 'CURRENT_TIMESTAMP',
+        },
+      },
+      {
+        kind: 'setDefault',
+        table: 'app.orders',
+        column: 'status',
+        default: "'new'",
+      },
+      {
+        kind: 'setDefault',
+        table: 'app.orders',
+        column: 'total',
+        default: '4.50',
+      },
+    ],
+  ],
+  [
+    'a function from an extension, typed without its schema',
+    [
+      {
+        kind: 'addColumn',
+        table: 'app.loose',
+        column: { name: 'token', type: 'uuid', default: 'uuid_generate_v4()' },
+      },
+    ],
+  ],
+  [
+    'an enum default and a default on a new table',
+    [
+      {
+        kind: 'addColumn',
+        table: 'app.users',
+        column: { name: 'mood', type: 'app.mood', default: "'sad'" },
+      },
+      {
+        kind: 'addTable',
+        table: 'app.events',
+        columns: [
+          { name: 'day', type: 'date', default: 'current_date' },
+          { name: 'note', type: 'varchar(20)', default: "'none'" },
+          { name: 'n', type: 'bigint', default: '1 + 2' },
+        ],
+      },
+    ],
+  ],
+  [
+    'a number default that is coerced when the column becomes text',
+    [{ kind: 'setType', table: 'app.orders', column: 'total', type: 'text' }],
+  ],
+  [
+    'check constraints, one column and several, on existing and new tables',
+    [
+      {
+        kind: 'addCheck',
+        table: 'app.users',
+        expression: 'age > 0 AND age < 150',
+      },
+      {
+        kind: 'addCheck',
+        table: 'app.orders',
+        expression: "total >= 0 OR status = 'void'",
+      },
+      {
+        kind: 'addTable',
+        table: 'app.spans',
+        columns: [
+          { name: 'lo', type: 'integer' },
+          { name: 'hi', type: 'integer' },
+        ],
+      },
+      { kind: 'addCheck', table: 'app.spans', expression: 'hi > lo' },
+    ],
+  ],
+  [
+    'rename a foreign key while the key it points at is replaced',
+    [
+      { kind: 'dropConstraint', table: 'app.orders', name: 'orders_pkey' },
+      { kind: 'addUnique', table: 'app.orders', columns: ['id'] },
+      {
+        kind: 'renameConstraint',
+        table: 'app.items',
+        name: 'items_order_id_fkey',
+        to: 'items_to_orders',
+      },
     ],
   ],
   ['drop a table with no key', [{ kind: 'dropTable', table: 'app.loose' }]],
@@ -377,6 +476,33 @@ describe('round trip', () => {
     },
     60_000,
   );
+
+  test('typing the default a column already has, in another form, is no change', async () => {
+    const { migration, difference } = await roundTrip(pg, SETUP, (m) =>
+      applyEdits(m, [
+        {
+          kind: 'setDefault',
+          table: 'app.users',
+          column: 'created',
+          default: ' NOW() ',
+        },
+        {
+          kind: 'setDefault',
+          table: 'app.orders',
+          column: 'total',
+          default: '0',
+        },
+        {
+          kind: 'setDefault',
+          table: 'app.loose',
+          column: 'tag',
+          default: "'x'",
+        },
+      ]),
+    );
+    expect(migration.statements).toEqual([]);
+    expect(difference).toBeNull();
+  });
 
   test('there are at least 20 cases', () => {
     expect(cases.length).toBeGreaterThanOrEqual(20);

@@ -13,7 +13,7 @@ export interface ColumnSpec {
   name: string;
   type: string;
   notNull?: boolean;
-  /** The SQL as Postgres prints it back, like `0` or `'new'::text`. */
+  /** The SQL as a user would type it, like `0`, `'new'` or `CURRENT_TIMESTAMP`; the round trip normalizes it. */
   default?: string;
   identity?: 'always' | 'byDefault';
 }
@@ -50,6 +50,8 @@ export type Edit =
       column: string;
       comment: string | null;
     }
+  /** The columns it uses are filled in when the expression is normalized, so don't drop one afterwards. */
+  | { kind: 'addCheck'; table: TableRef; expression: string }
   | { kind: 'addUnique'; table: TableRef; columns: string[] }
   | { kind: 'addIndex'; table: TableRef; columns: string[]; unique?: boolean }
   | {
@@ -261,6 +263,19 @@ export function applyEdit(model: SchemaModel, edit: Edit): void {
         name: '',
         autoName: true,
         columnIds: columnIdsNamed(model, edit.table, edit.columns),
+      };
+      return;
+    }
+    case 'addCheck': {
+      const id = newId();
+      model.constraints[id] = {
+        id,
+        tableId: tableNamed(model, edit.table).id,
+        kind: 'check',
+        name: '',
+        autoName: true,
+        columnIds: [],
+        expression: edit.expression,
       };
       return;
     }
