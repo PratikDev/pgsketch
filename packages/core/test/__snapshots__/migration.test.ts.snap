@@ -5,6 +5,7 @@ exports[`a migration with every kind of change > matches the reviewed text 1`] =
 -- Generated at: 2026-01-02T03:04:05.000Z
 -- Database: shop
 -- Operations: 23
+-- Risks: 3 destructive, 3 may fail, 2 breaks app code, 4 locks or slow
 
 BEGIN;
 
@@ -12,10 +13,13 @@ CREATE SCHEMA "reporting";
 
 ALTER TABLE "billing"."invoices" DROP CONSTRAINT "invoices_user_id_fkey";
 
+-- WARNING (destructive): Drops "invoices_open_idx", which pgsketch can't recreate
 DROP INDEX "billing"."invoices_open_idx";
 
+-- WARNING (breaks app code): Renaming table "users" to "people" breaks code that still uses the old name
 ALTER TABLE "public"."users" RENAME TO "people";
 
+-- WARNING (breaks app code): Renaming column "status" to "state" breaks code that still uses the old name
 ALTER TABLE "public"."people" RENAME COLUMN "status" TO "state";
 
 ALTER TABLE "billing"."invoices" RENAME CONSTRAINT "invoices_total_check" TO "positive_total";
@@ -30,22 +34,31 @@ CREATE TABLE "reporting"."audit" (
 
 ALTER TABLE "billing"."invoices" ADD COLUMN "note" varchar(40) NOT NULL DEFAULT 'n/a'::character varying;
 
+-- WARNING (may fail): Changing "billing"."invoices"."total" from numeric(10,2) to bigint may fail, depending on the data
+-- WARNING (locks or slow): Changing "billing"."invoices"."total" from numeric(10,2) to bigint rewrites or scans the whole table while holding a lock
 ALTER TABLE "billing"."invoices" ALTER COLUMN "total" TYPE bigint;
 
 ALTER TABLE "billing"."invoices" ALTER COLUMN "total" DROP DEFAULT;
 
+-- WARNING (may fail): Setting NOT NULL on "billing"."invoices"."total" fails if any row has no value there
+-- WARNING (locks or slow): Setting NOT NULL on "billing"."invoices"."total" scans the whole table while holding a lock
 ALTER TABLE "billing"."invoices" ALTER COLUMN "total" SET NOT NULL;
 
 ALTER TABLE "billing"."invoices" ALTER COLUMN "user_id" SET DEFAULT 0;
 
 ALTER TABLE "billing"."invoices" ALTER COLUMN "user_id" DROP NOT NULL;
 
+-- WARNING (destructive): Drops column "billing"."invoices"."id" and the data in it
 ALTER TABLE "billing"."invoices" DROP COLUMN "id";
 
+-- WARNING (destructive): Drops table "public"."events" and all its data
 DROP TABLE "public"."events";
 
+-- WARNING (may fail): Adding unique constraint "invoices_note_key" fails if there are duplicate values
+-- WARNING (locks or slow): Adding constraint "invoices_note_key" scans "billing"."invoices" while holding a lock
 ALTER TABLE "billing"."invoices" ADD CONSTRAINT "invoices_note_key" UNIQUE ("note");
 
+-- WARNING (locks or slow): Creating index "invoices_total_idx" blocks writes to "billing"."invoices" until it finishes
 CREATE INDEX "invoices_total_idx" ON "billing"."invoices" ("total");
 
 ALTER TABLE "reporting"."audit" ADD CONSTRAINT "audit_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."people" ("id") ON DELETE CASCADE;

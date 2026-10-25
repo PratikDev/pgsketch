@@ -198,6 +198,7 @@ describe('the file around the statements', () => {
         '-- Generated at: 2026-01-02T03:04:05.000Z',
         '-- Database: shop',
         '-- Operations: 1',
+        '-- Risks: none',
         '',
         'BEGIN;',
         '',
@@ -212,7 +213,9 @@ describe('the file around the statements', () => {
   test('no changes gives an empty transaction and no statements', () => {
     const r = renderMigration([], contextFor(fixtureModel));
     expect(r.statements).toEqual([]);
-    expect(r.text).toContain('-- Operations: 0\n\nBEGIN;\n\nCOMMIT;\n');
+    expect(r.text).toContain(
+      '-- Operations: 0\n-- Risks: none\n\nBEGIN;\n\nCOMMIT;\n',
+    );
   });
 
   test('the timestamp and database name are used as given', () => {
@@ -266,3 +269,84 @@ test('every operation kind in the diff can be rendered', () => {
     ].sort(),
   );
 });
+
+describe('risk warnings and counts', () => {
+  const lineBefore = (text: string, statement: string) => {
+    const lines = text.split('\n');
+    return lines[lines.findIndex((line) => line.startsWith(statement)) - 1];
+  };
+
+  test('a -- WARNING sits right above a DROP COLUMN', () => {
+    const { text } = migrationFor(everything());
+    expect(
+      lineBefore(text, 'ALTER TABLE "billing"."invoices" DROP COLUMN "id"'),
+    ).toBe(
+      '-- WARNING (destructive): Drops column "billing"."invoices"."id" and the data in it',
+    );
+  });
+
+  test('every risk gets its own warning line, above the first statement of its operation, in order', () => {
+    const desired: SchemaModel = structuredClone(fixtureModel);
+    desired.columns['c:20:3']!.notNull = true;
+    const { text } = migrationFor(desired);
+    expect(text).toContain(
+      [
+        '-- WARNING (may fail): Setting NOT NULL on "billing"."invoices"."total" fails if any row has no value there',
+        '-- WARNING (locks or slow): Setting NOT NULL on "billing"."invoices"."total" scans the whole table while holding a lock',
+        'ALTER TABLE "billing"."invoices" ALTER COLUMN "total" SET NOT NULL;',
+      ].join('\n'),
+    );
+  });
+
+  test('a safe statement has no warning, and the header says so', () => {
+    const desired: SchemaModel = structuredClone(fixtureModel);
+    desired.schemas.rep = { id: 'rep', name: 'reporting' };
+    const { text } = migrationFor(desired);
+    expect(text).not.toContain('WARNING');
+    expect(text).toContain('-- Risks: none');
+  });
+
+  test('the header counts the risks by level, worst first, and only the levels that occur', () => {
+    const { text } = migrationFor(everything());
+    const counts = text
+      .split('\n')
+      .find((line) => line.startsWith('-- Risks:'));
+    expect(counts).toBe(`-- Risks: ${EVERYTHING_RISKS}`);
+    // the same number of warning lines as risks counted
+    const total = [...EVERYTHING_RISKS.matchAll(/(\d+) /g)].reduce(
+      (sum, m) => sum + Number(m[1]),
+      0,
+    );
+    expect(
+      text.split('\n').filter((line) => line.startsWith('-- WARNING')),
+    ).toHaveLength(total);
+  });
+
+  test('warnings are only in the text: the statements list stays plain SQL', () => {
+    const { statements } = migrationFor(everything());
+    expect(
+      statements.some((s) => s.includes('WARNING') || s.startsWith('--')),
+    ).toBe(false);
+  });
+
+  test('an object name cannot break out of a warning line', () => {
+    const baseline: SchemaModel = structuredClone(fixtureModel);
+    baseline.tables['t:30']!.name = 'x\nDROP TABLE users;\r\n--';
+    const desired: SchemaModel = structuredClone(baseline);
+    delete desired.tables['t:30'];
+    const { ops, errors } = diff(baseline, desired);
+    expect(errors).toEqual([]);
+    const { text } = renderMigration(ops, { ...contextFor(desired), baseline });
+    const warning = text
+      .split('\n')
+      .filter((line) => line.startsWith('-- WARNING'));
+    expect(warning).toEqual([
+      '-- WARNING (destructive): Drops table "public"."x DROP TABLE users; --" and all its data',
+    ]);
+    // the statement itself holds the name inside a quoted identifier, which is valid SQL
+    expect(text).toContain('DROP TABLE "public"."x\nDROP TABLE users;\r\n--";');
+  });
+});
+// counted by hand from the reviewed snapshot: 3 drops, 3 may-fail (type change, NOT NULL, unique), 2 renames, 4 locks
+const EVERYTHING_RISKS =
+  '3 destructive, 3 may fail, 2 breaks app code, 4 locks or slow';
