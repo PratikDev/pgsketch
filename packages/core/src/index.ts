@@ -15,3 +15,6 @@ export { renderMigration } from './render/migration';
 export type { Migration, MigrationContext } from './render/migration';
 export { classifyTypeChange } from './risk/type-changes';
 export type { TypeChangeRisk } from './risk/type-changes';
+export { typeChangeRewritesTable } from './risk/type-changes';
+export { assessRisk, RISK_LABELS } from './risk/assess';
+export type { Risk, RiskLevel } from './risk/assess';
