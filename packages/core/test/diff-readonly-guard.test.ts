@@ -123,7 +123,8 @@ describe('dropping what read-only objects depend on', () => {
       (m) => delete m.tables['t:20'],
     );
     expect(own.errors).toEqual([]);
-    expect(kinds(own)).toEqual(['dropTable']);
+    // the table's own foreign key is dropped first, as for any dropped table
+    expect(kinds(own)).toEqual(['dropTable', 'dropConstraint']);
   });
 
   test('a policy on another table that reads this one blocks dropping it', () => {
@@ -182,6 +183,7 @@ describe('dropping what read-only objects depend on', () => {
       (m) => {
         delete m.tables['t:10'];
         delete m.tables['t:20'];
+        delete m.constraints['k:2']; // goes with its tables, as the editor removes it
       },
     );
     expect(r.errors).toEqual([]);

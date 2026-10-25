@@ -2,7 +2,7 @@ import { sameIds } from '../model/lookup';
 import type { Index, SchemaModel } from '../model/types';
 import type { DiffPart } from './ops';
 
-const sameIndexDefinition = (a: Index, b: Index): boolean =>
+export const sameIndexDefinition = (a: Index, b: Index): boolean =>
   a.tableId === b.tableId &&
   a.unique === b.unique &&
   sameIds(a.columnIds, b.columnIds);

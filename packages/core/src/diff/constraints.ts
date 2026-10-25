@@ -30,7 +30,7 @@ export function sameConstraintDefinition(
  * Constraints on tables that exist before and after, plus the new ones on tables being created
  * (a new table's primary key is part of its `createTable`). Postgres can't alter a constraint, so
  * a changed one is dropped and added again; a renamed one keeps its id and is a rename. A dropped
- * table takes its constraints with it.
+ * table takes its constraints with it, except a foreign key to another table, which is dropped first.
  */
 export function diffConstraints(
   baseline: SchemaModel,
@@ -44,7 +44,13 @@ export function diffConstraints(
     part.ops.push({ kind: 'addConstraint', constraint });
   }
   for (const before of Object.values(baseline.constraints)) {
-    if (!desired.tables[before.tableId]) continue;
+    if (!desired.tables[before.tableId]) {
+      // a foreign key to another table is dropped first: the key, column or table it points at may
+      // be dropped before this table is, and Postgres refuses while the foreign key still needs it
+      if (before.kind === 'fk' && before.refTableId !== before.tableId)
+        part.ops.push({ kind: 'dropConstraint', constraint: before });
+      continue;
+    }
     const after = desired.constraints[before.id];
     if (!after) {
       part.ops.push({ kind: 'dropConstraint', constraint: before });

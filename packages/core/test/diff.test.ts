@@ -71,11 +71,16 @@ describe('dropping a referenced table or column', () => {
     ).toHaveLength(1);
   });
 
-  test('a foreign key on a table that is dropped too is not dropped separately', () => {
+  test('a foreign key between two tables that are both dropped is dropped first, once', () => {
     const { ops } = run((m) => {
       for (const t of ['t:10', 't:20']) delete m.tables[t];
+      delete m.constraints['k:2'];
     });
-    expect(ops.filter((o) => o.kind === 'dropConstraint')).toEqual([]);
+    expect(
+      ops
+        .filter((o) => o.kind === 'dropConstraint')
+        .map((o) => o.constraint.id),
+    ).toEqual(['k:2']);
   });
 });
 

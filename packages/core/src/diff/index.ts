@@ -2,6 +2,7 @@ import type { SchemaModel } from '../model/types';
 import { diffColumns } from './columns';
 import { diffComments } from './comments';
 import { diffConstraints } from './constraints';
+import { diffFkKeyChanges } from './fk-keys';
 import { diffFkTypeChanges } from './fk-type-changes';
 import { diffIndexes } from './indexes';
 import type { ChangeOp, DiffPart } from './ops';
@@ -47,6 +48,7 @@ export function diff(baseline: SchemaModel, desired: SchemaModel): DiffPart {
     diffColumns,
     diffConstraints,
     diffFkTypeChanges,
+    diffFkKeyChanges,
     diffDanglingForeignKeys,
     diffIndexes,
     diffComments,

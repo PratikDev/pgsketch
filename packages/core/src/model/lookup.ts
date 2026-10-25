@@ -24,6 +24,10 @@ export const primaryKeyOf = (
 export const sameIds = (a: Id[], b: Id[]): boolean =>
   a.length === b.length && a.every((id, i) => id === b[i]);
 
+/** Two lists of ids with the same members, in any order. */
+export const sameSet = (a: Id[], b: Id[]): boolean =>
+  a.length === b.length && a.every((id) => b.includes(id));
+
 export interface RelationEntry {
   id: Id;
   name: string;

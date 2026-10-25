@@ -1,5 +1,6 @@
 import { fkTypesCompatible } from './fk-types';
 import type { ValidationError } from './errors';
+import { sameSet } from './lookup';
 import type { Column, Constraint, Id, Index, SchemaModel } from './types';
 import { validateNames } from './validate-names';
 
@@ -9,9 +10,6 @@ const UNUSABLE_FK_INDEX = [
   'expression-index',
   'non-btree-index',
 ];
-
-const sameSet = (a: Id[], b: Id[]) =>
-  a.length === b.length && a.every((id) => b.includes(id));
 
 function checkTypeParams(column: Column, errors: ValidationError[]): void {
   const [first, second] = column.type.params ?? [];

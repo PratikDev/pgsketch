@@ -4,7 +4,13 @@ import {
   sameConstraintDefinition,
 } from '../src/diff/constraints';
 import type { Constraint } from '../src/model/types';
-import { edit, partRunner, opKinds, type Change } from './diff-helpers';
+import {
+  edit,
+  editBoth,
+  partRunner,
+  opKinds,
+  type Change,
+} from './diff-helpers';
 import { fixtureModel } from './fixtures/model';
 
 const run = partRunner(diffConstraints);
@@ -104,12 +110,52 @@ describe('drop', () => {
     ]);
   });
 
-  test('constraints of a dropped table go with it and get no operation', () => {
+  test('constraints of a dropped table go with it, except its foreign key to another table', () => {
     const { ops } = run((m) => {
       delete m.tables['t:20'];
       for (const id of ['k:2', 'k:3', 'k:4']) delete m.constraints[id];
     });
-    expect(ops).toEqual([]);
+    expect(ops).toEqual([
+      { kind: 'dropConstraint', constraint: fixtureModel.constraints['k:2'] },
+    ]);
+  });
+
+  test('a foreign key between two dropped tables is dropped, so neither drop finds it', () => {
+    const { ops } = run((m) => {
+      delete m.tables['t:20'];
+      delete m.tables['t:10'];
+      for (const id of ['k:1', 'k:2', 'k:3', 'k:4']) delete m.constraints[id];
+    });
+    expect(ops).toEqual([
+      { kind: 'dropConstraint', constraint: fixtureModel.constraints['k:2'] },
+    ]);
+  });
+
+  test('a foreign key from a dropped table to itself needs no operation', () => {
+    const { baseline, desired } = editBoth(
+      (m) => {
+        m.constraints['k:9'] = {
+          id: 'k:9',
+          tableId: 't:10',
+          kind: 'fk',
+          name: 'users_parent_fkey',
+          columnIds: ['c:10:1'],
+          refTableId: 't:10',
+          refColumnIds: ['c:10:1'],
+          onDelete: 'no action',
+          onUpdate: 'no action',
+        };
+      },
+      (m) => {
+        delete m.tables['t:10'];
+        delete m.constraints['k:9'];
+      },
+    );
+    expect(
+      diffConstraints(baseline, desired).ops.filter(
+        (o) => o.kind === 'dropConstraint' && o.constraint.id === 'k:9',
+      ),
+    ).toEqual([]);
   });
 });
 

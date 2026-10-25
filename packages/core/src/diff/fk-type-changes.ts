@@ -37,7 +37,8 @@ export function diffFkTypeChanges(
   return { ops, errors: [] };
 }
 
-function needsRebuild(
+/** Whether the types of both sides change so that Postgres can't compare them part-way. */
+export function needsRebuild(
   before: Fk,
   baseline: SchemaModel,
   desired: SchemaModel,
