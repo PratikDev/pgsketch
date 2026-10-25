@@ -106,6 +106,33 @@ test('a foreign key that changes and has both column types change is rebuilt onc
   ).toHaveLength(1);
 });
 
+test('a foreign key that is renamed and rebuilt is added under its new name, with no rename', () => {
+  const { baseline, desired } = editBoth(
+    () => {},
+    (m) => {
+      delete m.constraints['k:1']; // the key it relies on is replaced by a unique constraint
+      m.constraints['new-u'] = {
+        id: 'new-u',
+        tableId: 't:10',
+        kind: 'unique',
+        name: 'users_id_key',
+        columnIds: ['c:10:1'],
+      };
+      m.constraints['k:2']!.name = 'owner_fk';
+    },
+  );
+  const { ops } = diff(baseline, desired);
+  expect(ops.some((o) => o.kind === 'renameConstraint')).toBe(false);
+  expect(
+    ops.filter(
+      (o) =>
+        o.kind === 'addConstraint' &&
+        o.constraint.id === 'k:2' &&
+        o.constraint.name === 'owner_fk',
+    ),
+  ).toHaveLength(1);
+});
+
 describe('errors from every part are collected, and guarded operations are removed', () => {
   test('errors from the parts and from the guard come back together', () => {
     const r = run((m) => {

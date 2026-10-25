@@ -37,6 +37,28 @@ function diffDanglingForeignKeys(
 }
 
 /**
+ * A constraint that is dropped and added again is added under its new name, so a rename of it as
+ * well would run after the drop and find nothing. This happens when a foreign key is both renamed
+ * and rebuilt, for its column types or because its key changed.
+ */
+function withoutRenamesOfRebuilt(ops: ChangeOp[]): ChangeOp[] {
+  const rebuilt = new Set(
+    ops.flatMap((op) =>
+      op.kind === 'addConstraint' &&
+      ops.some(
+        (o) =>
+          o.kind === 'dropConstraint' && o.constraint.id === op.constraint.id,
+      )
+        ? [op.constraint.id]
+        : [],
+    ),
+  );
+  return ops.filter(
+    (op) => !(op.kind === 'renameConstraint' && rebuilt.has(op.constraintId)),
+  );
+}
+
+/**
  * Everything that has to change to turn the loaded schema (`baseline`) into the edited one
  * (`desired`), found by comparing objects by id, plus the edits that must block SQL generation.
  * The result is in no particular order; the migration renderer puts it in phases.
@@ -56,7 +78,7 @@ export function diff(baseline: SchemaModel, desired: SchemaModel): DiffPart {
   const guarded = guardReadOnly(
     baseline,
     desired,
-    parts.flatMap((p) => p.ops),
+    withoutRenamesOfRebuilt(parts.flatMap((p) => p.ops)),
   );
   return {
     ops: guarded.ops,
