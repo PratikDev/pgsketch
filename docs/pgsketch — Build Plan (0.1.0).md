@@ -739,9 +739,9 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | H1 | Name-based comparison: does a model match the desired model by qualified names? | `diff/applied.ts` | Same schema with different IDs matches; one extra column doesn't | done |
 | H2 | Round-trip helper: apply migration to a fresh database, re-introspect, compare with `applied.ts` | `test/roundtrip.ts` | *DB*: 20 hand-written edit cases round-trip exactly | done |
 | H3 | `fast-check` arbitraries for models and edits | `test/arbitraries.ts` | *DB*: property test, 200 runs, every generated edit round-trips | done |
-| H4 | Expression normalization on its own connection, whole-table temp copy, extended protocol, TEMP fallback | `normalize/expression.ts` | *DB*: `CURRENT_TIMESTAMP` and `now()` normalize alike; an unqualified `uuid_generate_v4()` from an extension in `public` comes back as `public.uuid_generate_v4()`; `end_date > start_date` normalizes; `1); COMMIT; …` fails; a role without TEMP gets the fallback | todo |
-| H5 | Normalization used by round trips so defaults compare cleanly | `test/roundtrip.ts` | *DB*: round trips with custom defaults produce no phantom diff | todo |
-| H6 | Nightly property run with 2,000 cases across Postgres 14–18 | `.github/workflows/nightly.yml` | A manual trigger of the workflow passes | todo |
+| H4 | Expression normalization on its own connection, whole-table temp copy, extended protocol, TEMP fallback | `normalize/expression.ts` | *DB*: `CURRENT_TIMESTAMP` and `now()` normalize alike; an unqualified `uuid_generate_v4()` from an extension in `public` comes back as `public.uuid_generate_v4()`; `end_date > start_date` normalizes; `1); COMMIT; …` fails; a role without TEMP gets the fallback | done |
+| H5 | Normalization used by round trips so defaults compare cleanly | `test/roundtrip.ts` | *DB*: round trips with custom defaults produce no phantom diff | done |
+| H6 | Nightly property run with 2,000 cases across Postgres 14–18 | `.github/workflows/nightly.yml` | A manual trigger of the workflow passes | working |
 
 ### I. Desktop main process foundation
 
