@@ -104,7 +104,7 @@ describe('add, rename and drop', () => {
     ]);
   });
 
-  test("drop keeps the column's own name and the table's new one", () => {
+  test('drop uses the names the column and its table were loaded with, since it runs before renames', () => {
     const op: ChangeOp = {
       kind: 'dropColumn',
       column: fixtureModel.columns['c:10:2'],
@@ -114,7 +114,7 @@ describe('add, rename and drop', () => {
       m.tables['t:10']!.name = 'people';
     });
     expect(render(op, ctx)).toEqual([
-      'ALTER TABLE "public"."people" DROP COLUMN "status"',
+      'ALTER TABLE "public"."users" DROP COLUMN "status"',
     ]);
   });
 

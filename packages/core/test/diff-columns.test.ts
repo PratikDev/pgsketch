@@ -189,9 +189,25 @@ describe('changes to an existing column (E5)', () => {
       c.notNull = true;
     });
     expect(ops.map((o) => o.kind)).toEqual([
+      'dropDefault', // the old default is not cast to the new type
       'alterColumnType',
       'setDefault',
       'setNotNull',
+    ]);
+  });
+
+  test('a type change keeps the default as it is, or drops it, without an extra operation', () => {
+    const keepsDefault = run(
+      (m) => (m.columns['c:20:3']!.type = { name: 'bigint', isArray: false }),
+    );
+    expect(keepsDefault.ops.map((o) => o.kind)).toEqual(['alterColumnType']);
+    const dropsDefault = run((m) => {
+      m.columns['c:20:3']!.type = { name: 'bigint', isArray: false };
+      m.columns['c:20:3']!.default = null;
+    });
+    expect(dropsDefault.ops.map((o) => o.kind)).toEqual([
+      'alterColumnType',
+      'dropDefault',
     ]);
   });
 

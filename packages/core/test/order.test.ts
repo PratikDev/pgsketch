@@ -25,26 +25,26 @@ const examples: [ChangeOp, number][] = [
   [{ kind: 'dropConstraint', constraint: pk }, 3],
   [{ kind: 'dropConstraint', constraint: check }, 3],
   [{ kind: 'dropIndex', index: m.indexes['i:1'] }, 3],
-  [{ kind: 'renameTable', tableId: 't:10', from: 'a', to: 'b' }, 4],
-  [{ kind: 'renameColumn', columnId: 'c:10:1', from: 'a', to: 'b' }, 4],
-  [{ kind: 'renameConstraint', constraintId: 'k:1', from: 'a', to: 'b' }, 4],
-  [{ kind: 'renameIndex', indexId: 'i:1', from: 'a', to: 'b' }, 4],
-  [{ kind: 'createTable', table: table('new', 'n'), columns: [] }, 5],
-  [{ kind: 'addColumn', column: m.columns['c:10:1'] }, 6],
-  [{ kind: 'alterColumnType', columnId: 'c:10:1', from: type, to: type }, 7],
+  [{ kind: 'renameTable', tableId: 't:10', from: 'a', to: 'b' }, 6],
+  [{ kind: 'renameColumn', columnId: 'c:10:1', from: 'a', to: 'b' }, 6],
+  [{ kind: 'renameConstraint', constraintId: 'k:1', from: 'a', to: 'b' }, 6],
+  [{ kind: 'renameIndex', indexId: 'i:1', from: 'a', to: 'b' }, 6],
+  [{ kind: 'createTable', table: table('new', 'n'), columns: [] }, 7],
+  [{ kind: 'addColumn', column: m.columns['c:10:1'] }, 8],
+  [{ kind: 'alterColumnType', columnId: 'c:10:1', from: type, to: type }, 9],
   [
     {
       kind: 'setDefault',
       columnId: 'c:10:1',
       to: { kind: 'constant', expression: '1' },
     },
-    7,
+    9,
   ],
-  [{ kind: 'dropDefault', columnId: 'c:10:1' }, 7],
-  [{ kind: 'setNotNull', columnId: 'c:10:1' }, 7],
-  [{ kind: 'dropNotNull', columnId: 'c:10:1' }, 7],
-  [{ kind: 'dropColumn', column: m.columns['c:10:1'] }, 8],
-  [{ kind: 'dropTable', table: m.tables['t:10'] }, 9],
+  [{ kind: 'dropDefault', columnId: 'c:10:1' }, 9],
+  [{ kind: 'setNotNull', columnId: 'c:10:1' }, 9],
+  [{ kind: 'dropNotNull', columnId: 'c:10:1' }, 9],
+  [{ kind: 'dropColumn', column: m.columns['c:10:1'] }, 4],
+  [{ kind: 'dropTable', table: m.tables['t:10'] }, 5],
   [{ kind: 'addConstraint', constraint: pk }, 10],
   [{ kind: 'addConstraint', constraint: check }, 10],
   [{ kind: 'addIndex', index: m.indexes['i:1'] }, 10],
@@ -109,7 +109,7 @@ describe('phases', () => {
       { kind: 'dropConstraint', constraint: check },
       { kind: 'dropConstraint', constraint: fk },
     ];
-    expect(orderOps(ops, models).map((o) => o.phase)).toEqual([2, 3, 3, 4]);
+    expect(orderOps(ops, models).map((o) => o.phase)).toEqual([2, 3, 3, 6]);
   });
 });
 
@@ -143,7 +143,7 @@ describe('within a phase', () => {
     ]);
   });
 
-  test('the statements for one column run as type, default, then nullability, and stay together', () => {
+  test('the statements for one column run as drop default, type, set default, then nullability, and stay together', () => {
     const ops: ChangeOp[] = [
       { kind: 'setNotNull', columnId: 'c:10:2' },
       { kind: 'setNotNull', columnId: 'c:10:1' },
@@ -154,6 +154,7 @@ describe('within a phase', () => {
       },
       { kind: 'alterColumnType', columnId: 'c:10:2', from: type, to: type },
       { kind: 'alterColumnType', columnId: 'c:10:1', from: type, to: type },
+      { kind: 'dropDefault', columnId: 'c:10:2' },
     ];
     expect(
       orderOps(ops, models).map(
@@ -162,33 +163,67 @@ describe('within a phase', () => {
     ).toEqual([
       'alterColumnType:c:10:1',
       'setNotNull:c:10:1',
+      'dropDefault:c:10:2',
       'alterColumnType:c:10:2',
       'setDefault:c:10:2',
       'setNotNull:c:10:2',
     ]);
   });
 
+  test('new columns are added in the order of their positions, not by name', () => {
+    const base = m.columns['c:10:1']!;
+    const added = (id: string, name: string, position: number): ChangeOp => ({
+      kind: 'addColumn',
+      column: { ...base, id, name, position },
+    });
+    const ops = [
+      added('x:1', 'alpha', 4),
+      added('x:2', 'Zed', 3),
+      added('x:3', 'beta', 3),
+    ];
+    const names = orderOps(ops, models).map((o) =>
+      o.op.kind === 'addColumn' ? o.op.column.name : '',
+    );
+    expect(names).toEqual(['Zed', 'beta', 'alpha']); // position first, name only breaks a tie
+  });
+
   test('a dropped table is sorted by the name it had, a renamed one by its new name', () => {
     const baseline: SchemaModel = structuredClone(m);
     const desired: SchemaModel = structuredClone(m);
-    desired.tables['t:10']!.name = 'aaa'; // renamed from "users"
+    desired.tables['t:10']!.name = 'zzz'; // renamed from "users"
+    desired.tables['t:20']!.name = 'aaa'; // renamed from "invoices"
     delete desired.tables['t:30']; // dropped; was "events"
     const ops: ChangeOp[] = [
-      { kind: 'renameTable', tableId: 't:10', from: 'users', to: 'aaa' },
+      { kind: 'renameTable', tableId: 't:10', from: 'users', to: 'zzz' },
+      { kind: 'renameTable', tableId: 't:20', from: 'invoices', to: 'aaa' },
       { kind: 'dropTable', table: baseline.tables['t:30']! },
-      { kind: 'dropTable', table: baseline.tables['t:20']! },
     ];
-    // the rename is phase 4, then both drops, billing.invoices before public.events
-    expect(orderOps(ops, { baseline, desired }).map((o) => o.op.kind)).toEqual([
-      'renameTable',
-      'dropTable',
-      'dropTable',
-    ]);
+    // the drop is phase 5 and the renames phase 6: billing.aaa before public.zzz
     expect(
-      orderOps(ops, { baseline, desired })
-        .slice(1)
-        .map((o) => (o.op.kind === 'dropTable' ? o.op.table.id : '')),
-    ).toEqual(['t:20', 't:30']);
+      orderOps(ops, { baseline, desired }).map((o) =>
+        o.op.kind === 'dropTable'
+          ? o.op.table.id
+          : (o.op as { tableId: string }).tableId,
+      ),
+    ).toEqual(['t:30', 't:20', 't:10']);
+  });
+
+  test('a name is free before a rename or a new object takes it', () => {
+    const column = m.columns['c:10:1']!;
+    const ops: ChangeOp[] = [
+      { kind: 'renameColumn', columnId: 'c:10:2', from: 'status', to: 'id' },
+      { kind: 'addColumn', column: { ...column, id: 'x:1' } },
+      { kind: 'createTable', table: table('x:2', 'users'), columns: [] },
+      { kind: 'dropColumn', column },
+      { kind: 'dropTable', table: m.tables['t:10']! },
+    ];
+    expect(orderOps(ops, models).map((o) => o.op.kind)).toEqual([
+      'dropColumn',
+      'dropTable',
+      'renameColumn',
+      'createTable',
+      'addColumn',
+    ]);
   });
 });
 

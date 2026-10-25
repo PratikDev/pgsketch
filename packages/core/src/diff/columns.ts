@@ -7,7 +7,8 @@ import type { DiffPart } from './ops';
  * of its `createTable`, and columns of a dropped table go with it, so neither gets an operation of
  * its own. A renamed column keeps its id, so it is a rename and never a drop plus an add. A
  * column that changes in several ways gets one operation per change, in the order they run:
- * type, default, nullability. Turning identity on or off for an existing column isn't possible in
+ * type, default, nullability. A default that is replaced while the type changes is dropped first
+ * and set again afterwards, so the old one is never cast to the new type. Turning identity on or off for an existing column isn't possible in
  * 0.1.0, so it blocks generation instead of being ignored.
  */
 export function diffColumns(
@@ -38,7 +39,14 @@ export function diffColumns(
         to: after.name,
       });
     }
-    if (!samePgType(before.type, after.type)) {
+    const typeChanged = !samePgType(before.type, after.type);
+    const defaultChanged =
+      before.default?.expression !== after.default?.expression;
+    // the type change would cast the old default, which can fail for a default that is about to go
+    if (typeChanged && defaultChanged && before.default && after.default) {
+      part.ops.push({ kind: 'dropDefault', columnId: before.id });
+    }
+    if (typeChanged) {
       part.ops.push({
         kind: 'alterColumnType',
         columnId: before.id,
@@ -47,7 +55,7 @@ export function diffColumns(
       });
     }
     // only the SQL matters: a preset and a typed-in expression with the same text are one default
-    if (before.default?.expression !== after.default?.expression) {
+    if (defaultChanged) {
       part.ops.push(
         after.default
           ? { kind: 'setDefault', columnId: before.id, to: after.default }

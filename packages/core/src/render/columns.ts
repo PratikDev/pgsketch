@@ -36,8 +36,8 @@ type ColumnOp = Extract<
 >;
 
 /**
- * These all run after the renames, so tables and columns are written with their new names; a
- * dropped column keeps the name it had. A type change gets `USING col::type` only when Postgres
+ * These run after the renames, so tables and columns are written with their new names, except
+ * dropping a column, which runs before them and uses the names it was loaded with. A type change gets `USING col::type` only when Postgres
  * has no implicit or assignment conversion, because an explicit cast would, for example, truncate
  * a too-long string silently where the assignment cast raises an error.
  */
@@ -58,7 +58,7 @@ export function renderColumnOp(op: ColumnOp, context: RenderContext): string[] {
     }
     case 'dropColumn':
       return [
-        `${alter(op.column.tableId)} DROP COLUMN ${quoteIdent(op.column.name)}`,
+        `ALTER TABLE ${tableRef(context, op.column.tableId, 'baseline')} DROP COLUMN ${quoteIdent(op.column.name)}`,
       ];
     case 'alterColumnType': {
       const column = alterTarget(op.columnId, context);

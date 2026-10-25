@@ -11,9 +11,10 @@ export interface OrderedOp {
 
 /**
  * Where an operation runs, so that every statement finds what it needs: schemas first, then the
- * foreign keys and other constraints and indexes that are going away, renames, new tables, column
- * changes, dropped columns and tables, new constraints and indexes, foreign keys last (every
- * table exists by then), and comments at the end.
+ * foreign keys and other constraints and indexes that are going away, then dropped columns and
+ * tables (so their names are free for renames and new objects), renames, new tables, new columns,
+ * column changes, new constraints and indexes, foreign keys last (every table exists by then), and
+ * comments at the end.
  */
 function phaseOf(op: ChangeOp): Phase {
   switch (op.kind) {
@@ -23,24 +24,24 @@ function phaseOf(op: ChangeOp): Phase {
       return op.constraint.kind === 'fk' ? 2 : 3;
     case 'dropIndex':
       return 3;
+    case 'dropColumn':
+      return 4;
+    case 'dropTable':
+      return 5;
     case 'renameTable':
     case 'renameColumn':
     case 'renameConstraint':
     case 'renameIndex':
-      return 4;
-    case 'createTable':
-      return 5;
-    case 'addColumn':
       return 6;
+    case 'createTable':
+      return 7;
+    case 'addColumn':
+      return 8;
     case 'alterColumnType':
     case 'setDefault':
     case 'dropDefault':
     case 'setNotNull':
     case 'dropNotNull':
-      return 7;
-    case 'dropColumn':
-      return 8;
-    case 'dropTable':
       return 9;
     case 'addConstraint':
       return op.constraint.kind === 'fk' ? 11 : 10;
@@ -63,18 +64,23 @@ const RENAME_GROUP = {
   renameIndex: 3,
 } as const;
 
-/** Statements for one column run as type, default, nullability. */
+/**
+ * Statements for one column run as: drop the default, change the type, set the default, then
+ * nullability. The old default goes before the type changes because Postgres casts it too, which
+ * fails when it can't be cast.
+ */
 const COLUMN_STEP = {
-  alterColumnType: 0,
-  setDefault: 1,
-  dropDefault: 1,
-  setNotNull: 2,
-  dropNotNull: 2,
+  dropDefault: 0,
+  alterColumnType: 1,
+  setDefault: 2,
+  setNotNull: 3,
+  dropNotNull: 3,
 } as const;
 
 /**
- * Puts the operations in migration order: by phase, then by qualified name, so the same changes
- * always give the same statements whatever order they were found in. The name is only a sort key
+ * Puts the operations in migration order: by phase, then by qualified name (new columns by their
+ * position in the table), so the same changes always give the same statements whatever order they
+ * were found in. The name is only a sort key
  * (`schema.table.column`), built from the edited model where the object still exists and from the
  * loaded one where it doesn't; the operation kind breaks any remaining tie.
  */
@@ -116,6 +122,8 @@ export function orderOps(
       case 'renameTable':
         return tableLabel(op.tableId);
       case 'addColumn':
+        // new columns go in the table's column order, so the table ends up as it was edited
+        return `${tableLabel(op.column.tableId)}.${String(op.column.position).padStart(6, '0')}.${op.column.name}`;
       case 'dropColumn':
         return columnLabel(op.column.id);
       case 'renameColumn':
