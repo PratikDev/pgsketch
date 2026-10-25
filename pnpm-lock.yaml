@@ -205,6 +205,12 @@ importers:
       lucide-react:
         specifier: ^1.61.0
         version: 1.61.0(@types/react@19.3.0)(react@19.3.1)
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
+      pg-connection-string:
+        specifier: 2.14.1
+        version: 2.14.1
       radix-ui:
         specifier: ^1.8.1
         version: 1.8.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -224,6 +230,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.3.5(@types/node@24.19.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@testcontainers/postgresql':
+        specifier: ^12.2.1
+        version: 12.2.1
       '@testing-library/dom':
         specifier: ^10.4.2
         version: 10.4.2
@@ -236,6 +245,9 @@ importers:
       '@types/node':
         specifier: ^24.19.2
         version: 24.19.2
+      '@types/pg':
+        specifier: ^8.23.1
+        version: 8.23.1
       '@types/react':
         specifier: ^19.3.0
         version: 19.3.0
