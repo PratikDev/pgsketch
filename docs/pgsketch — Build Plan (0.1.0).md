@@ -73,7 +73,7 @@ Every decision below is settled for 0.1.0; the rest of this plan builds on them.
 | Connections per window | At most three: main, normalizer, and Validate |
 | Delivery | Copy button, and Save via the native save dialog opening in the last-used folder |
 | Diagram layout | Positions saved locally per database; auto-layout only on request. Positions for tables that no longer exist are pruned on load |
-| Runtime | Node only (Electron's bundled Node; pnpm workspaces). `pg` pinned to an exact version, because `queryMode` is undocumented; upgrades must keep the protocol and SSL tests green. `better-sqlite3` for app data; `node:sqlite` to be revisited once stable |
+| Runtime | Node only (Electron's bundled Node; pnpm workspaces). `pg` pinned to an exact version, because `queryMode` is undocumented; upgrades must keep the protocol and SSL tests green. `node:sqlite` (built into Node) for app data |
 
 ## Architecture
 
@@ -319,7 +319,7 @@ The main process owns everything with side effects (the database connection, loc
 | Fingerprint poller | Every 5 s while connected, and on window focus. Compares with the **last-seen** fingerprint and pushes `schema:changed` only when it differs, so a stale session isn't re-notified every 5 s |
 | Normalizer | Runs core `normalizeExpression` on its reused task connection, queuing requests, with a per-session cache |
 | Validator | Runs the dry run on its own task connection (see Validate flow) |
-| App store | `better-sqlite3` database for connections, drafts, layouts and settings |
+| App store | `node:sqlite` database for connections, drafts, layouts and settings |
 | Secrets | Encrypts and decrypts passwords with `safeStorage`. Checks the keyring backend only after the app's `ready` event, since it reports `unknown` before then, and treats `unknown` like `basic_text` |
 | File service | Native save dialog, remembers the last folder, writes the `.sql` file |
 | Instance lock | `app.requestSingleInstanceLock()`; a second launch focuses the existing window |
@@ -547,7 +547,7 @@ All app paths come from one data directory, which the `PGSKETCH_DATA_DIR` enviro
 
 ### Packaging
 
-- `electron-builder` with the `deb` target; `better-sqlite3` rebuilt for Electron's ABI during packaging.
+- `electron-builder` with the `deb` target. App data uses `node:sqlite`, so there is no native module to rebuild.
 - Desktop entry and icon installed for the applications menu.
 - The packaged app is smoke-tested in CI (launch, open the connect screen, quit), not just dev mode.
 - Version 0.1.0; GitHub Release with the `.deb` attached.
@@ -571,7 +571,7 @@ A pnpm monorepo with two workspaces: `packages/core` (pure TypeScript) and `apps
 | SQL view | CodeMirror 6 + `@codemirror/lang-sql` | SQL preview, expression inputs |
 | Postgres | `pg` (node-postgres) | Main and task connections, SSL, introspection, validate. Pinned to an exact version, since `queryMode` is undocumented |
 | Validation | zod | IPC inputs, connection forms |
-| App data | `better-sqlite3` (`node:sqlite` to be revisited once stable) | Connections, drafts, layouts, settings |
+| App data | `node:sqlite` | Connections, drafts, layouts, settings |
 | Secrets | Electron `safeStorage` | Passwords |
 | Unit tests | Vitest | Core logic, stores |
 | Component tests | Vitest + React Testing Library + jsdom | Renderer components |
@@ -750,9 +750,9 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | I1 | All IPC channel names and zod schemas | `shared/ipc-contract.ts` | Valid inputs parse; malformed ones are rejected | done |
 | I2 | Generic IPC register helper, domain registry, typed preload bridge | `main/ipc/register.ts`, `main/ipc/index.ts`, `preload/index.ts` | A `ping` channel round-trips; an invalid payload is rejected in main | done |
 | I3 | Logger with password and connection-string redaction | `main/log.ts` | A logged URL has its password removed | done |
-| I4 | App database with migrations | `store/db.ts`, `store/migrations/001_init.sql` | Temp database reaches `user_version = 1` with all four tables and the SSL and URL columns | todo |
-| I5 | Connections repository | `store/connections.ts` | Insert, list by recency, delete; URL stored without password or `sslmode` | todo |
-| I6 | Secrets with keyring backend check | `services/secrets.ts` | With `basic_text` or `unknown` mocked, remembering a password is refused; the check never runs before `ready` | todo |
+| I4 | App database with migrations | `store/db.ts`, `store/migrations/001_init.sql` | Temp database reaches `user_version = 1` with all four tables and the SSL and URL columns | done |
+| I5 | Connections repository | `store/connections.ts` | Insert, list by recency, delete; URL stored without password or `sslmode` | done |
+| I6 | Secrets with keyring backend check | `services/secrets.ts` | With `basic_text` or `unknown` mocked, remembering a password is refused; the check never runs before `ready` | done |
 | I7 | Driver error mapping, including SSL errors | `services/errors.ts` | Each signal in the error table maps to its message | todo |
 | I8 | Main connection: SSL options built per mode (with `prefer` fallback), `search_path` pin, version check, `application_name`, serialized queries | `services/connection.ts`, `services/ssl.ts` | *DB*: against an SSL-enabled container, `require` connects, `verify-full` with the wrong CA fails, `prefer` falls back on a server without SSL; Postgres 13 is rejected; concurrent queries never interleave | todo |
 | I9 | Task connections and `runSingle` (`queryMode: 'extended'`) | `services/task-connection.ts`, `services/run-single.ts` | *DB*: a task connection's open transaction is invisible to the main connection; `SELECT 1; SELECT 2` through `runSingle` fails | todo |
@@ -892,7 +892,7 @@ The biggest risk is a migration that silently does the wrong thing; most mitigat
 | Catalog differences across Postgres versions | CI matrix 14–18 on every DB test, including Postgres 18's `contype 'n'` rows |
 | Canvas sluggish on large schemas | Text-only cells, single active input, compact nodes below 70% zoom, schema filter, layout in a worker |
 | Passwords stored weakly | Refuse to remember passwords when the keyring backend is `basic_text` or `unknown` |
-| `better-sqlite3` breaks in the packaged app | Native rebuild in packaging; packaged smoke test in CI |
+| `node:sqlite` is still a release candidate | Used through a thin wrapper (`store/db.ts`); the packaged smoke test in CI opens the database |
 | Flaky E2E runs | Each test gets its own `PGSKETCH_DATA_DIR`, so data and the single-instance lock never collide |
 | Scope creep | Anything outside the goals list goes to the roadmap below |
 
@@ -901,4 +901,4 @@ The biggest risk is a migration that silently does the wrong thing; most mitigat
 - **0.2:** creating and editing enums; renaming and dropping existing schemas and moving tables between schemas; turning identity on or off for existing columns; undo/redo; table search; impact numbers in warnings (rows affected, nulls, duplicates, table size estimate); rebase unsaved edits onto unrelated external changes.
 - **0.3:** views and sequences as editable objects; partial and expression indexes; SSH tunnels.
 - **0.4:** multiple databases per window; schema export as an image or documentation.
-- **Later:** a CLI built from `packages/core` for CI drift checks; down migrations; `node:sqlite` once stable; more platforms and package formats.
+- **Later:** a CLI built from `packages/core` for CI drift checks; down migrations; more platforms and package formats.
