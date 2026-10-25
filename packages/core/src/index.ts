@@ -18,3 +18,4 @@ export type { TypeChangeRisk } from './risk/type-changes';
 export { typeChangeRewritesTable } from './risk/type-changes';
 export { assessRisk, RISK_LABELS } from './risk/assess';
 export type { Risk, RiskLevel } from './risk/assess';
+export { firstDifference, matchesByName } from './diff/applied';
