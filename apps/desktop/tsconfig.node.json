@@ -6,7 +6,8 @@
     "playwright.config.*",
     "e2e/**/*",
     "src/main/**/*",
-    "src/preload/**/*"
+    "src/preload/**/*",
+    "src/shared/**/*"
   ],
   "compilerOptions": {
     "composite": true,
