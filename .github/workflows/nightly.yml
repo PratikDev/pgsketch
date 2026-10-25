@@ -1,0 +1,33 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      runs:
+        description: Property test cases per Postgres version
+        default: '2000'
+
+jobs:
+  property:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: [14, 15, 16, 17, 18]
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      PG_VERSION: ${{ matrix.pg }}
+      PGSKETCH_PROPERTY_RUNS: ${{ inputs.runs || '2000' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # a failure prints its seed and path; PGSKETCH_PROPERTY_SEED and PGSKETCH_PROPERTY_PATH replay it
+      - run: pnpm --filter @pgsketch/core exec vitest run roundtrip-property
