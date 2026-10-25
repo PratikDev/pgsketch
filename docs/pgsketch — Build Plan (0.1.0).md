@@ -729,8 +729,8 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
 | G1 | Type-change matrix: safe widenings and lossy conversions | `risk/type-changes.ts` | Table-driven; an unlisted pair returns "may fail" | done |
-| G2 | `assessRisk` for every op kind | `risk/assess.ts` | One case per level; `addIndex` is "locks"; `addColumn` NOT NULL without default is "may fail" | todo |
-| G3 | Warning comments and risk counts in the migration | `render/migration.ts` | Snapshot shows `-- WARNING` above a `DROP COLUMN` | todo |
+| G2 | `assessRisk` for every op kind | `risk/assess.ts` | One case per level; `addIndex` is "locks"; `addColumn` NOT NULL without default is "may fail" | done |
+| G3 | Warning comments and risk counts in the migration | `render/migration.ts` | Snapshot shows `-- WARNING` above a `DROP COLUMN` | done |
 
 ### H. Round trips and normalization
 
