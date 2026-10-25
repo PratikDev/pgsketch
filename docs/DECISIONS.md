@@ -417,3 +417,19 @@ A type change gets `USING col::type` only when `needsUsing` says there is no ass
 A unit test goes through every ordered pair of 20 common types and requires exactly the listed pairs to be safe or lossy. A DB test runs 14 changes on real Postgres and checks that every pair called safe keeps its value and every pair called lossy changes it or is refused.
 
 **Rationale:** the risk is calling something safe that is not, and only the database can say.
+
+## What `assessRisk` flags, and what it leaves alone
+
+**Date & time:** 2026-10-25 17:59 (G2)
+
+`assessRisk(op, baseline)` returns a list of `{ level, message }` with level `destructive`, `may-fail`, `breaks-app` or `locks` (shown as "locks or slow"); no risks means safe. Dropping a table or column is destructive, and so is dropping a read-only constraint or index, which pgsketch can't recreate, named in the message. Renaming a table or column breaks app code. `setNotNull` may fail and scans the table. A new NOT NULL column with no default and no identity may fail. Adding a primary key, unique, check or foreign key constraint to a table that already exists may fail and scans the table; adding an index blocks writes. A type change is destructive if `classifyTypeChange` says lossy, may fail if it says may-fail, and also takes a lock if it rewrites the table. Constraints and indexes on a table created in the same migration are safe: it is empty. Everything else (renaming a constraint or index, defaults, dropping NOT NULL, comments, creating schemas and tables) is safe. Messages use the loaded schema's names, and `assessRisk` never throws, because it runs on every edit, even while the model is invalid.
+
+**Rationale:** the plan's table, applied operation by operation. Two points are mine: a unique index may fail on duplicates just as a unique constraint does, and "the table rewrites" is decided by `typeChangeRewritesTable`, which says no rewrite only for the widenings that change a type modifier or share a representation (a longer `varchar`, `varchar` to `text`, `text` to plain `varchar`, more `numeric` digits at the same scale) and treats every other change as a rewrite. That can only add a warning, and a DB test checks the "no rewrite" claims against the table's file on disk.
+
+## The migration computes its own risks, writes one warning per risk, and counts them in the header
+
+**Date & time:** 2026-10-25 17:59 (G3)
+
+`renderMigration(ops, context)` calls `assessRisk` for each operation, so there is no `risks` parameter (the plan's `render(ops, risks, context)`): a caller can't pass risks that don't match the operations, and the context already holds the loaded model. Each risk becomes a `-- WARNING (<level>): <message>` line above the first statement of its operation, in the order `assessRisk` returns them. The header gets a `-- Risks:` line counting risks (not operations) from worst to least, for example `3 destructive, 3 may fail, 2 breaks app code, 4 locks or slow`, or `none`. Warnings are only in the text; the statement list for Validate stays plain SQL. Line breaks in a message are replaced by spaces, because a message can contain a table or column name.
+
+**Rationale:** the file is something the user reads and runs, so the dangerous statements should be marked where they are, and an object name must not be able to end a comment line and start SQL.
