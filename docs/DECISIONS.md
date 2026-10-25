@@ -554,3 +554,35 @@ The shapes the plan only names are mine and can change when their phases come: c
 `createLogger({ write, now })` gives `debug`, `info`, `warn` and `error`, each writing `<ISO time> <LEVEL> <message> <context as JSON>`. The message and every string in the context go through `redact`, which replaces the password in `scheme://user:password@host` (up to the last `@` before the path), and the value of `password=`, `sslpassword=` and `PGPASSWORD=` in a query string, a libpq string or an environment; the value of any context key containing `pass`, `secret`, `token`, `credential` or `private` is replaced whole. An `Error` is logged with its name, message, stack and cause, redacted. Line breaks in a message become a literal `\n`, so an entry is always one line. `fileSink` appends to a file (mode 600) in a folder made on the first line, and `defaultLogPath` is `~/.local/state/pgsketch/main.log`, or under an absolute `XDG_STATE_HOME`. The exported `log` does nothing until something writes to it, and nothing in `main` does yet.
 
 **Rationale:** the plan says logs never contain passwords or full connection strings. Only the password is removed, so the host, user and database stay in the log where they help; a URL without a password is left as it is. The sink writes synchronously and never rotates, marked with a `shortcut:` comment: a session writes a few lines. Phase I10 decides where the data directory is and can route the log path through it.
+
+## The app database uses `node:sqlite`, not `better-sqlite3`
+
+**Date & time:** 2026-10-25 22:58 (I4)
+
+The app database is opened with Node's built-in `node:sqlite` (`DatabaseSync`). The plan named `better-sqlite3` and listed `node:sqlite` as "to be revisited once stable"; this was asked and chosen. The plan's mentions (tech stack, services table, packaging, risks) are updated to match. The check that settled it: Electron 44 embeds Node 24.22 (ABI 149), the local Node is 25 (ABI 141) and CI uses Node 24 (ABI 137), and `better-sqlite3` is a native module built for one ABI, so unit tests under Node and the app under Electron would have needed separate builds and a rebuild step in every job. `node:sqlite` works under Vitest and inside Electron's main process (probed: migration files bundled, WAL on, `user_version` 1) with nothing to rebuild.
+
+**Rationale:** it removes the native-module risk the plan listed for packaging. The cost is that the API is still a release candidate, so all use goes through `store/db.ts` and the repositories, and the packaged smoke test in CI is what proves it opens the database in the packaged app.
+
+## Migrations are numbered SQL files bundled as text
+
+**Date & time:** 2026-10-25 22:58 (I4)
+
+`store/migrations/NNN_name.sql` files are found with `import.meta.glob` (as raw text, so they are inside the bundle and need no path at run time). `migrate(db)` runs each file above the database's `PRAGMA user_version` in its own transaction together with the version bump, so a failing step rolls back and leaves the earlier ones. A database whose version is higher than the newest file (from a newer pgsketch) is refused with a clear error and left alone. `openAppDb(path)` opens the file or `:memory:`, sets `journal_mode = WAL` and `foreign_keys = ON`, migrates, and closes the database again if anything fails. `001_init.sql` is the plan's schema as written. Where the file lives is I10's job.
+
+**Rationale:** the plan fixes the mechanism (numbered files, `user_version`, those two pragmas); the glob avoids a list of files to keep in step, and refusing a newer database avoids silently running an old schema over new data.
+
+## The connections repository stores what it can without secrets
+
+**Date & time:** 2026-10-25 22:58 (I5)
+
+`createConnectionsRepo(db)` has `add`, `get`, `list` (most recently used first, a tie going to the one saved later), `touch`, `remove` and `passwordEnc`. Rows are read through a zod schema, so a bad row fails loudly instead of being cast. `add` takes the connection parameters, a label and the already-encrypted password (or null); the password in the parameters is never read. A connection-string connection is stored with its URL through `splitConnectionUrl`, which removes the password (from the user info or `?password=`), `sslpassword` and `sslmode`, returns the password so the caller can encrypt it, and refuses anything that isn't a `postgres://` or `postgresql://` URL, with errors that never repeat the text. A `SavedConnection` has `hasPassword`, never the password; the ciphertext comes only from `passwordEnc(id)`. `remove` deletes the connection row only.
+
+**Rationale:** the plan's test asks for the URL without password or `sslmode`; doing it in the repository means no caller can store them by forgetting to. Deleting a connection's drafts and layouts (`connection.forget`) waits for those repositories, because their key format (`dbKey`) belongs to session start. Saving the same connection twice makes two entries; whether to match an existing one is decided with the `connection.open` channel in I11.
+
+## Passwords are encrypted only with a real system keyring
+
+**Date & time:** 2026-10-25 22:58 (I6)
+
+`createSecrets(safeStorage, isReady)` gives `problem()`, `encrypt` and `decrypt`. A password is only handled when the app is ready, `safeStorage` can encrypt, and the selected backend is one of `gnome_libsecret`, `kwallet`, `kwallet5` or `kwallet6`; otherwise `encrypt` and `decrypt` throw `SecretsUnavailableError` with the reason (`not-ready`, `unavailable` or `weak-backend`) and call nothing on `safeStorage`. Before ready, neither `isEncryptionAvailable` nor `getSelectedStorageBackend` is called. The check runs on every call, so a keyring that appears later is used. In the real Electron main process on this machine it reports `gnome_libsecret`.
+
+**Rationale:** the plan says to refuse `basic_text` and `unknown`; an allow-list of keyrings refuses those and anything Electron adds later that isn't known to be safe. `decrypt` is guarded the same way because with a weaker backend it could not read ciphertext made with a keyring anyway. Nothing calls these yet; the connection channels (I11) will.
