@@ -480,3 +480,51 @@ The property test failed on valid edits several times; each was reproduced as a 
 Renames run in name order, so renaming table `a` to `b` while `b` is renamed to `c` fails with "already exists", and swapping two names can't work without a temporary one. The same holds for columns, constraints and indexes. This is not handled in 0.1.0: the property generator avoids such renames (`heldByRenamed` in `test/arbitraries.ts`, marked with a `shortcut:` comment), and Validate shows the Postgres error before anything runs.
 
 **Rationale:** ordering renames by dependency is small, but swaps need a temporary name and extra statements and warnings, which is a change of its own. A later phase can order renames by what they free and break swaps with a temporary name.
+
+## `normalizeExpression` asks Postgres in a rolled-back temporary copy of the table
+
+**Date & time:** 2026-10-25 20:46 (H4)
+
+`normalizeExpression(query, expression, target, context)` returns `normalized` (the text and, for a check, the ids of the columns it uses), `invalid` (Postgres's own message) or `raw` (the text as typed, trimmed). `target` is a default on one column or a check; `context` is every column of the table, existing and pending, with its id, name and type, plus the connection's original `search_path`, which `currentSearchPath(query)` reads. It runs `BEGIN`; checks the role may create temporary tables (`has_database_privilege(…, 'TEMP')`, not in recovery, and the transaction not read-only); sets the user's `search_path` with `set_config(…, true)`; creates `pg_temp.pgsketch_expression` with a copy of every column; adds the expression with `ALTER TABLE … SET DEFAULT` or `ADD CONSTRAINT … CHECK`; sets an empty `search_path`; reads it back with `pg_get_expr` (the same call introspection uses, so the texts match); and always ends with `ROLLBACK`. An error while adding the expression is the `invalid` result; any other error is thrown.
+
+**Rationale:** it follows the plan's five steps. Two details are mine. The privilege check runs first, instead of trying to create the table and matching a SQLSTATE, because core can't see the driver's error type and the check also covers a read-only replica or session. The default is added with `ALTER TABLE … SET DEFAULT` after the table exists, not inside `CREATE TABLE`, so the user's text is never inside the column list.
+
+## The query function must send one statement per message
+
+**Date & time:** 2026-10-25 20:46 (H4)
+
+`normalizeExpression` documents that `query` has to use the extended protocol, and `test/pg.ts` has `extendedQuery(client)` and `TestPostgres.singleQuery` for it (`pg` takes `queryMode: 'extended'` but its types don't declare it, so the options object is built in a variable). Tests show both sides: `1; COMMIT; DROP TABLE …` as a default and `true); COMMIT; DROP TABLE …; --` as a check are `invalid` on the extended `Query` and leave the table alone; sent through the simple protocol on a separate connection, the same text really does run `COMMIT` and drop the table. The expression can still change the throwaway table (a payload can add a column to it), but never anything else, and a test checks that a function called in a default or check is never run.
+
+**Rationale:** the plan only guarantees the `COMMIT` case, and that depends on how the caller sends the SQL, which core can't enforce. A first version of the injection test passed with the simple protocol too, because its payload failed type checking before the other statements ran; the control test and the boolean payload fix that, so the test now fails if the protocol changes.
+
+## What "normalize alike" means, and the order of a check's columns
+
+**Date & time:** 2026-10-25 20:46 (H4)
+
+The plan says `CURRENT_TIMESTAMP` and `now()` "normalize alike". In Postgres they are different expressions (`CURRENT_TIMESTAMP` is read back as `CURRENT_TIMESTAMP`, `now()` as `now()`), so they stay different. The test instead checks that every way of typing one of them (`current_timestamp`, extra spaces, `NOW()`, `now ( )`) gives one text, and that the text is what a real table with that default reads back. A check's columns come back in the order Postgres stores them (`conkey`, the order they first appear in the expression), which is also the order introspection gives; sorting them by column position made the round trip report a difference for `hi > lo`.
+
+**Rationale:** turning `now()` into `CURRENT_TIMESTAMP` is a real change to the column's default text, even though both give the current time, and merging them would hide it. The order matters because the comparison treats a check's column list as an ordered list.
+
+## Round trips normalize what the user typed, as the editor will
+
+**Date & time:** 2026-10-25 20:46 (H5)
+
+`roundTrip` now calls `normalizeExpression` on every default whose text or column type changed and every new check before it names, validates and diffs the model, and uses `extendedQuery` for all its queries. Hand-written cases type defaults the way a user would (`CURRENT_TIMESTAMP`, a bare `'new'`, `4.50`, `uuid_generate_v4()` with the extension in `public`, an enum value, `1 + 2`) and add checks on one and several columns; one case types a column's current default in other forms (`NOW()`) and requires an empty migration. The property test now generates defaults as typed text and keeps them across type changes where they still make sense (a number to any convertible type, a string to another string type, either time type).
+
+**Rationale:** the plan keeps only normalized text in the desired model, so the round trip has to do what the editor will, or every typed default would look like a phantom difference. A default is normalized again when its column's type changes because Postgres coerces it (`42` on an integer column becomes `'42'::text` when the column becomes text). Checks are only in the hand-written cases: a check keeps its text as typed, so renaming a column it uses leaves the edited text stale, which the editor has to handle (Postgres rewrites a stored check itself).
+
+## Nightly property run
+
+**Date & time:** 2026-10-25 20:46 (H6)
+
+`.github/workflows/nightly.yml` runs only `roundtrip-property` on Postgres 14 to 18 (one job each, not stopping the others on a failure) at 02:17 UTC every day, with `PGSKETCH_PROPERTY_RUNS` set to 2,000, or to the `runs` input of a manual run. A failure prints its seed and path in the log; the `PGSKETCH_PROPERTY_SEED` and `PGSKETCH_PROPERTY_PATH` variables replay it.
+
+**Rationale:** the plan's check for H6 is a manual trigger of the workflow, which needs the file to be on GitHub, so it is not marked done until that run passes. The same command with 2,000 cases was run locally on Postgres 16.
+
+## A constraint that is rebuilt is not also renamed
+
+**Date & time:** 2026-10-25 21:05 (H5)
+
+When a foreign key is dropped and added again (its column types change, or the key it relies on is replaced) and it is also renamed, `diff` no longer emits the `renameConstraint`: the add already uses the new name, and the rename would run after the drop and fail with "constraint does not exist". It is a small pass in `diff()` over the collected operations, before the read-only guard, so it covers both rebuild reasons.
+
+**Rationale:** found by the property test on Postgres 18 (a dropped unique index and a renamed foreign key in one edit), then added as a hand-written case and a diff test. The rename is dropped rather than the rebuild changed because the rebuild is needed whatever the name is.
