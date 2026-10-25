@@ -72,7 +72,9 @@ export async function introspectIndexes(query: Query): Promise<Index[]> {
        JOIN pg_class t ON t.oid = x.indrelid
        JOIN pg_am am ON am.oid = ic.relam
       WHERE ${userTableSql('t')}
-        AND NOT EXISTS (SELECT 1 FROM pg_constraint c WHERE c.conindid = x.indexrelid)
+        AND NOT EXISTS (
+              SELECT 1 FROM pg_constraint c
+               WHERE c.conindid = x.indexrelid AND c.contype IN ('p', 'u', 'x'))
       ORDER BY x.indrelid, ic.oid`,
   );
   return rows.map(toIndex);

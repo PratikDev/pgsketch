@@ -23,6 +23,7 @@ beforeAll(async () => {
     CREATE INDEX pattern_ops ON public.t (e text_pattern_ops);
     CREATE INDEX fill ON public.t (d) WITH (fillfactor = 70);
     CREATE TABLE public.events (id int, day date) PARTITION BY RANGE (day);
+    CREATE TABLE public.refs (b int REFERENCES public.t (b)); -- uses the unique index "uniq"
     CREATE INDEX events_id ON public.events (id);
     CREATE TABLE public.events_2024 PARTITION OF public.events FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
   `);
@@ -48,6 +49,13 @@ const columnNames = async (index: Index) => {
   );
   return index.columnIds.map((id) => byId.get(id));
 };
+
+test("a unique index that a foreign key relies on is still listed, a constraint's own index is not", async () => {
+  const i = await named();
+  expect(i.uniq).toMatchObject({ unique: true });
+  expect(Object.keys(i)).not.toContain('t_pkey');
+  expect(Object.keys(i)).not.toContain('t_g_key');
+});
 
 test('plain, unique and composite B-tree indexes are editable', async () => {
   const i = await named();
