@@ -1,8 +1,8 @@
-import { _electron as electron, expect, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { launchApp } from './app';
 
 test('launches the app and reads the window title', async () => {
-  const app = await electron.launch({ args: ['.'] });
-  const window = await app.firstWindow();
+  const { app, window } = await launchApp();
   await expect(window).toHaveTitle('pgsketch');
   await app.close();
 });

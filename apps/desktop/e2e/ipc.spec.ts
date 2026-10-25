@@ -1,8 +1,8 @@
-import { _electron as electron, expect, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { launchApp } from './app';
 
 test('the renderer reaches main only through the typed bridge', async () => {
-  const app = await electron.launch({ args: ['.'] });
-  const window = await app.firstWindow();
+  const { app, window } = await launchApp();
   const run = <T>(expression: string) => window.evaluate<T>(expression);
 
   expect(
