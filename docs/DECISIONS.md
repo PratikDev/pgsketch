@@ -586,3 +586,35 @@ The app database is opened with Node's built-in `node:sqlite` (`DatabaseSync`). 
 `createSecrets(safeStorage, isReady)` gives `problem()`, `encrypt` and `decrypt`. A password is only handled when the app is ready, `safeStorage` can encrypt, and the selected backend is one of `gnome_libsecret`, `kwallet`, `kwallet5` or `kwallet6`; otherwise `encrypt` and `decrypt` throw `SecretsUnavailableError` with the reason (`not-ready`, `unavailable` or `weak-backend`) and call nothing on `safeStorage`. Before ready, neither `isEncryptionAvailable` nor `getSelectedStorageBackend` is called. The check runs on every call, so a keyring that appears later is used. In the real Electron main process on this machine it reports `gnome_libsecret`.
 
 **Rationale:** the plan says to refuse `basic_text` and `unknown`; an allow-list of keyrings refuses those and anything Electron adds later that isn't known to be safe. `decrypt` is guarded the same way because with a weaker backend it could not read ciphertext made with a keyring anyway. Nothing calls these yet; the connection channels (I11) will.
+
+## Connection errors become messages in one place, matched on codes
+
+**Date & time:** 2026-10-25 23:09 (I7)
+
+`describeConnectionError(error, { host, port, user })` turns a failure into the message of the plan's table: `ECONNREFUSED` (and `ENOENT`, a missing socket file) gives "Couldn't reach Postgres at host:port. Is it running?"; `ENOTFOUND` and `EAI_AGAIN` give "Host not found"; a connection timeout gives "Connection timed out"; `28P01`, `28000` and `3D000` give the password, authentication and database messages; the server answering an SSL request with "no" gives the SSL message; Node's certificate error codes (and anything starting `ERR_TLS_CERT`) give the certificate message; and `UnsupportedVersionError` carries "pgsketch needs Postgres 14 or newer (found X)". Anything else is the first line of the driver's message with passwords removed (`redact`). `ConnectionError` is what the connection code throws: its message is ready to show and the original error is its `cause`.
+
+**Rationale:** a signal is read from the error's `code`, never from words in a message, with two exceptions where the driver gives no code: the timeout (`Connection terminated due to connection timeout` or `timeout expired`, not the word "timeout" alone, so a lock or statement timeout in Validate isn't called a connection timeout) and the refused-SSL text, which is a constant. Added beyond the table: `ENOENT` for sockets and `EAI_AGAIN` for a DNS lookup that can't be answered.
+
+## SSL modes are tried in order, and no `sslmode` ever reaches `pg`
+
+**Date & time:** 2026-10-25 23:09 (I8)
+
+`sslAttempts(mode, ca)` gives the `ssl` options to try: `disable` is `false`; `require` is `{ rejectUnauthorized: false }`; `verify-full` is `{ ca, rejectUnauthorized: true }` (Node also checks the host name) and needs the CA text; `prefer` is encrypted first and `false` second. The next attempt is made only when the server's answer to the SSL request was "no", so a wrong password or an unreachable host is reported as it is instead of being tried again in plaintext. A connection string is split into its parts (`splitConnectionUrl` removes the password and `sslmode`, `pg-connection-string` reads host, port and user) and the parts are passed to `pg`, never the string, so nothing in a URL can set SSL options. The CA file is read only for `verify-full`, and an unreadable one is "Couldn't read the CA certificate file".
+
+**Rationale:** the plan says the selector is the only source of truth and that `pg`'s own parsing of the weaker modes can't be relied on. `pg-connection-string` is a direct dependency (pinned like `pg`) because the app now imports it.
+
+## The main connection
+
+**Date & time:** 2026-10-25 23:09 (I8)
+
+`openMainConnection(params, { onLost })` returns `serverVersion`, `originalSearchPath`, `exclusive(work)`, `query` and `close`. It connects (5 s timeout, `application_name = 'pgsketch'`), checks `server_version_num` is at least 140000 and closes the connection if not, records the `search_path` with core's `currentSearchPath`, then runs `SET search_path = ''` (Postgres shows that as `""`). Every statement goes through `runSingle` (extended protocol, one statement per message); `runSingle` is in `services/run-single.ts` now because the main connection needs it, and I9 adds its test and the task connections. `exclusive` runs a function with the connection to itself and queues the next caller behind it, whether it fails or not; `query` is one statement queued the same way. A break in an open connection is passed to `onLost` once (`pg` can raise several errors for one break, and an unhandled one would crash the process) and not at all after `close`.
+
+**Rationale:** `pg` queues single statements by itself, but a transaction is several, and core's snapshot helper needs the connection for all of them, so the queue has to be around whole sections. Reporting a loss once keeps the later `connection:lost` event from firing repeatedly.
+
+## Desktop DB tests: their own project, helper and CI step
+
+**Date & time:** 2026-10-25 23:09 (I8)
+
+Desktop tests named `*.db.test.ts` are a third Vitest project (`db`, with the long container timeouts); `pnpm test` runs the renderer and main projects and `pnpm --filter @pgsketch/desktop test:db` runs the DB one, which the CI `db` job (Postgres 14 to 18) now runs after core's. `test/postgres.ts` starts a container (version from `PG_VERSION`), optionally with SSL: certificates are made with the `openssl` command (a CA, a server certificate for `localhost` only, and a second CA that signed nothing), and the key is installed by the entrypoint with the owner and mode Postgres insists on. The `ssl` tests use `localhost` for a match and `127.0.0.1` for a host-name mismatch. The Postgres 13 test starts its own server.
+
+**Rationale:** it is a second small container helper next to core's, because the desktop tests need SSL and a chosen version and core's helper doesn't, and sharing one across packages would mean importing one package's tests from the other. The tests need Docker and `openssl`; both are on the CI runners.
