@@ -19,3 +19,10 @@ export { typeChangeRewritesTable } from './risk/type-changes';
 export { assessRisk, RISK_LABELS } from './risk/assess';
 export type { Risk, RiskLevel } from './risk/assess';
 export { firstDifference, matchesByName } from './diff/applied';
+export { currentSearchPath, normalizeExpression } from './normalize/expression';
+export type {
+  ExpressionColumn,
+  ExpressionContext,
+  ExpressionTarget,
+  NormalizedExpression,
+} from './normalize/expression';

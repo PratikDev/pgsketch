@@ -2,12 +2,31 @@ import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { Client } from 'pg';
 import type { Query } from '../src/introspect/query';
 
+/**
+ * A `Query` that sends every statement on its own, in the extended protocol. `pg` only does that
+ * when there are parameter values or `queryMode` is set; without it a statement with no values
+ * goes in the simple protocol, which runs several statements sent together.
+ */
+export const extendedQuery =
+  (client: Client): Query =>
+  async (sql, params) => {
+    // a variable, not an inline object: `queryMode` works in `pg` but is missing from its types
+    const config = {
+      text: sql,
+      values: params ? [...params] : [],
+      queryMode: 'extended' as const,
+    };
+    return (await client.query(config)).rows;
+  };
+
 export interface TestPostgres {
   /** Major version under test, from `PG_VERSION` (default 16). */
   version: string;
   client: Client;
   /** The same connection as `client`, in the shape core's introspection expects. */
   query: Query;
+  /** The same connection again, one statement per message. */
+  singleQuery: Query;
   connectionUri: string;
   stop: () => Promise<void>;
 }
@@ -25,6 +44,7 @@ export async function startPostgres(): Promise<TestPostgres> {
     client,
     query: async (sql, params) =>
       (await client.query(sql, params ? [...params] : undefined)).rows,
+    singleQuery: extendedQuery(client),
     connectionUri,
     stop: async () => {
       await client.end();
