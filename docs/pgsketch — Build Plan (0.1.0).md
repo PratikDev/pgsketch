@@ -239,19 +239,19 @@ A changed constraint or index (different columns or actions) is expressed as dro
 The renderer sorts operations into fixed phases so every statement's dependencies exist when it runs:
 
 1. Create schemas.
-2. Drop foreign keys that are dropped or changed, that point at a table or column being dropped, or that fall under the incompatible type-change rule.
+2. Drop foreign keys that are dropped or changed, that point at a table or column being dropped, that fall under the incompatible type-change rule, that rely on a key being dropped or rebuilt, or that belong to a table being dropped (a foreign key to another table goes first).
 3. Drop other constraints and indexes that are dropped or changed.
-4. Renames: tables, columns, constraints, indexes.
-5. Create tables (with columns and primary key, without foreign keys).
-6. Add columns.
-7. Alter columns: type, defaults, nullability.
-8. Drop columns.
-9. Drop tables.
+4. Drop columns.
+5. Drop tables.
+6. Renames: tables, columns, constraints, indexes.
+7. Create tables (with columns and primary key, without foreign keys).
+8. Add columns, in the order of their positions.
+9. Alter columns: drop default, type, set default, nullability.
 10. Add constraints and indexes (non-FK).
 11. Add foreign keys.
 12. Comments.
 
-Within a phase, operations are sorted by qualified name, so the same changes always produce byte-identical SQL. That determinism is what makes snapshot tests reliable. Table drops in phase 9 need no dependency ordering: every foreign key pointing at a dropped table was already dropped in phase 2. All statements run inside the transaction; 0.1.0 has no statements that must run outside it.
+Within a phase, operations are sorted by qualified name, so the same changes always produce byte-identical SQL. That determinism is what makes snapshot tests reliable. Drops come before renames and new objects so that a name is free by the time something else takes it (drop a table and create another with its name, drop a column and rename another to its name). Table drops in phase 5 need no dependency ordering: every foreign key pointing at a dropped table, and every foreign key a dropped table has to another table, was already dropped in phase 2. All statements run inside the transaction; 0.1.0 has no statements that must run outside it.
 
 ### Risk classification
 
@@ -736,9 +736,9 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| H1 | Name-based comparison: does a model match the desired model by qualified names? | `diff/applied.ts` | Same schema with different IDs matches; one extra column doesn't | todo |
-| H2 | Round-trip helper: apply migration to a fresh database, re-introspect, compare with `applied.ts` | `test/roundtrip.ts` | *DB*: 20 hand-written edit cases round-trip exactly | todo |
-| H3 | `fast-check` arbitraries for models and edits | `test/arbitraries.ts` | *DB*: property test, 200 runs, every generated edit round-trips | todo |
+| H1 | Name-based comparison: does a model match the desired model by qualified names? | `diff/applied.ts` | Same schema with different IDs matches; one extra column doesn't | done |
+| H2 | Round-trip helper: apply migration to a fresh database, re-introspect, compare with `applied.ts` | `test/roundtrip.ts` | *DB*: 20 hand-written edit cases round-trip exactly | done |
+| H3 | `fast-check` arbitraries for models and edits | `test/arbitraries.ts` | *DB*: property test, 200 runs, every generated edit round-trips | done |
 | H4 | Expression normalization on its own connection, whole-table temp copy, extended protocol, TEMP fallback | `normalize/expression.ts` | *DB*: `CURRENT_TIMESTAMP` and `now()` normalize alike; an unqualified `uuid_generate_v4()` from an extension in `public` comes back as `public.uuid_generate_v4()`; `end_date > start_date` normalizes; `1); COMMIT; …` fails; a role without TEMP gets the fallback | todo |
 | H5 | Normalization used by round trips so defaults compare cleanly | `test/roundtrip.ts` | *DB*: round trips with custom defaults produce no phantom diff | todo |
 | H6 | Nightly property run with 2,000 cases across Postgres 14–18 | `.github/workflows/nightly.yml` | A manual trigger of the workflow passes | todo |
