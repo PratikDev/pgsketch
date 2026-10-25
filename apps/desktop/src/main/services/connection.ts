@@ -18,7 +18,7 @@ import { sslAttempts, type SslConfig } from './ssl';
 const CONNECT_TIMEOUT_MS = 5_000;
 const MIN_VERSION_NUM = 140_000;
 
-export interface MainConnection {
+export interface ServerConnection {
   /** The server's version, like `16.4`. */
   readonly serverVersion: string;
   /** The `search_path` the connection had before it was pinned to empty. */
@@ -33,7 +33,7 @@ export interface MainConnection {
   close(): Promise<void>;
 }
 
-export interface MainConnectionOptions {
+export interface ConnectionOptions {
   /** Called when an open connection breaks (the server went away, the backend was terminated). */
   onLost?: (error: Error) => void;
   /** For tests; reads the CA certificate file for `verify-full`. */
@@ -104,18 +104,19 @@ async function connect(
 }
 
 /**
- * The main connection of a window: opened with explicit SSL options, checked for a supported
+ * A connection to the server, for the main connection of a window and for task connections alike:
+ * opened with explicit SSL options, checked for a supported
  * version, and with its `search_path` recorded and then pinned to empty, so definitions are always
  * read fully qualified. Anything that goes wrong comes back as a `ConnectionError` whose message
  * can be shown as it is.
  */
-export async function openMainConnection(
+export async function openConnection(
   params: ConnectionParams,
   {
     onLost,
     readFile = (path) => readFileSync(path, 'utf8'),
-  }: MainConnectionOptions = {},
-): Promise<MainConnection> {
+  }: ConnectionOptions = {},
+): Promise<ServerConnection> {
   const { config, target } = clientConfigFor(params);
   const fail = (error: Error): never => {
     throw new ConnectionError(describeConnectionError(error, target), {

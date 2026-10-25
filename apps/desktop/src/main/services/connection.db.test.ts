@@ -6,14 +6,14 @@ import {
   type Certificates,
   type TestServer,
 } from '../../../test/postgres';
-import { openMainConnection, type MainConnection } from './connection';
+import { openConnection, type ServerConnection } from './connection';
 import { ConnectionError } from './errors';
 
 const version = process.env.PG_VERSION ?? '16';
 let plain: TestServer;
 let secure: TestServer;
 let certificates: Certificates;
-const open: MainConnection[] = [];
+const open: ServerConnection[] = [];
 
 beforeAll(async () => {
   certificates = makeCertificates();
@@ -43,7 +43,7 @@ const paramsFor = (
 });
 
 async function connect(params: ConnectionParams, onLost?: (e: Error) => void) {
-  const connection = await openMainConnection(params, { onLost });
+  const connection = await openConnection(params, { onLost });
   open.push(connection);
   return connection;
 }
@@ -59,7 +59,7 @@ async function failure(params: ConnectionParams): Promise<string> {
   throw new Error('connected');
 }
 
-const usesSsl = async (c: MainConnection) =>
+const usesSsl = async (c: ServerConnection) =>
   (
     await c.query<{ ssl: boolean }>(
       'SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()',
@@ -150,7 +150,7 @@ describe('the main connection', () => {
   });
 
   test('close ends the connection', async () => {
-    const c = await openMainConnection(paramsFor(plain));
+    const c = await openConnection(paramsFor(plain));
     await c.close();
     await expect(c.query('SELECT 1')).rejects.toThrow();
   });
