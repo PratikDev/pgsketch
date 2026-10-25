@@ -618,3 +618,43 @@ The app database is opened with Node's built-in `node:sqlite` (`DatabaseSync`). 
 Desktop tests named `*.db.test.ts` are a third Vitest project (`db`, with the long container timeouts); `pnpm test` runs the renderer and main projects and `pnpm --filter @pgsketch/desktop test:db` runs the DB one, which the CI `db` job (Postgres 14 to 18) now runs after core's. `test/postgres.ts` starts a container (version from `PG_VERSION`), optionally with SSL: certificates are made with the `openssl` command (a CA, a server certificate for `localhost` only, and a second CA that signed nothing), and the key is installed by the entrypoint with the owner and mode Postgres insists on. The `ssl` tests use `localhost` for a match and `127.0.0.1` for a host-name mismatch. The Postgres 13 test starts its own server.
 
 **Rationale:** it is a second small container helper next to core's, because the desktop tests need SSL and a chosen version and core's helper doesn't, and sharing one across packages would mean importing one package's tests from the other. The tests need Docker and `openssl`; both are on the CI runners.
+
+## Task connections share the main connection's opener
+
+**Date & time:** 2026-10-25 23:41 (I9)
+
+`openConnection` (the former `openMainConnection`, renamed with `ServerConnection` and `ConnectionOptions`) opens both the main connection and task connections, so SSL, `application_name`, the version check and the `search_path` recording and pinning are the same code. `openTaskConnection` adds `rolledBack(work)`: `BEGIN`, the work, then `ROLLBACK` always (also when the work fails; a rollback on a broken connection is ignored), with the connection to itself meanwhile. It is for Validate's dry run; expression normalization runs core's `normalizeExpression`, which does its own `BEGIN` and `ROLLBACK`, on a task connection's `query`. Everything sent through `runSingle` is one statement per message. Tests: a transaction opened on a task connection is invisible to the main connection and gone after the rollback; `SELECT 1; SELECT 2`, `…; COMMIT` and `…; DROP TABLE` are refused with "multiple commands" and run nothing; a `COMMIT` can't be smuggled into a rolled-back section; and the same call on a plain `pg` client with no values really does run several statements, which is why `runSingle` exists. The 30-second idle close and the "at most three connections" rule are the normalizer's and Validate's to keep (M9, O phases).
+
+**Rationale:** the plan says task connections have "the same settings" as the main one, and a second copy of the opener would drift. A section can't call the connection's own `query` (it would wait for itself), so work gets the `query` it is handed.
+
+## Where the app keeps its files, and one instance per folder
+
+**Date & time:** 2026-10-25 23:41 (I10)
+
+`resolveAppPaths` gives the data folder, the database file and the log file. `PGSKETCH_DATA_DIR` puts all three in that folder (`pgsketch.db`, `main.log`); without it the data is under `~/.local/share/pgsketch` and the log under `~/.local/state/pgsketch`, following absolute `XDG_DATA_HOME` and `XDG_STATE_HOME`. `main/index.ts` reads it first, creates the folder (mode 700), makes it Electron's `userData` folder, and only then asks for `requestSingleInstanceLock`, which Electron scopes to that folder: a launch that doesn't get it quits, and one that does focuses its window when a second launch hands over. The app database is opened and the handlers registered once the app is ready. The exported `log` singleton in `log.ts` is gone: the logger is now made in `index.ts` with the log path from here. Every e2e test starts the app through `launchApp`, which gives it a folder of its own, so tests side by side and a developer's own copy never share a database, a log or the lock. The two new e2e tests start two instances with different folders, and a second launch with the same one, checking that it exits with code 0 and that the first instance receives the hand-over.
+
+**Rationale:** the plan says all paths come from one folder with this override, and that the override also sets the user-data folder the lock belongs to. Putting the log in the same folder when overridden keeps a test's files together.
+
+## The connection channels return a result instead of throwing
+
+**Date & time:** 2026-10-25 23:41 (I11)
+
+`connection.open` and `connection.openSaved` return `{ status: 'opened', session }` or `{ status: 'failed', message }`, as `connection.test` already did, instead of rejecting. Electron wraps a rejection's message as "Error invoking remote method 'x': ConnectionError: …", which the renderer would have to take apart. `SessionInfo` gained `saved`: the saved connection's id and `passwordNotSaved` (a password was given but there is no keyring to keep it), or null when the connection isn't saved. The handlers (`main/ipc/connection.ts`) take their dependencies as `IpcDeps` (the repository, secrets, the session, an event emitter and the function that opens connections), so unit tests run them with a fake connection; `registerAllIpc(ipc, deps)` passes them to every domain. The behavior:
+
+- `open` connects first, then remembers if asked, so a connection that doesn't work is never saved. A password is encrypted only when `secrets.problem()` is null; otherwise the connection is still saved and opened, without the password, and `passwordNotSaved` says so. A connection string's password is taken out and encrypted like any other.
+- `openSaved` decrypts the password in main and builds the parameters from the saved row (a URL gets its password put back inside it); the renderer gets a `SessionInfo` and never the password. A password that can't be read gives "Enter the password again" and doesn't connect. A saved connection moves to the top of the recent list when opened.
+- The `dbKey` is `<saved id>:<database>` for a saved connection and a SHA-256 of host, port, user and database for one that isn't; `hostKind` is `socket` for a socket kind or a host starting with `/`, `local` for `localhost`, `127.0.0.1` and `::1`, `remote` otherwise.
+- Opening another database closes the first only once the new one is open; a failure leaves the old one open. A connection that can't be saved is closed again.
+- A connection that breaks by itself emits `connection:lost` once, with the reason redacted, and is forgotten; a connection that was already replaced reports nothing.
+- `forget` removes the saved connection only; drafts and layouts wait for their repositories. Saving the same connection twice makes two entries.
+- `defaults` gives the operating system user and `/var/run/postgresql`.
+
+**Rationale:** the plan's table says "session info" and "OK or a mapped error"; a result object keeps the message clean. The e2e test of the saved-connection flow attaches to the app over the DevTools protocol (`launchWithKeyring`) because Playwright's own launcher starts Electron with `--password-store=basic`, which removes the keyring; on a machine with no keyring it skips itself with that reason, and the flow is also covered by unit tests with a fake keyring.
+
+## Core is bundled into the main process
+
+**Date & time:** 2026-10-25 23:41 (I11)
+
+`electron.vite.config.ts` stops externalizing `@pgsketch/core` for the main process. The workspace package is TypeScript source with extension-less imports, so Node couldn't load it at run time (the app failed at startup with `ERR_MODULE_NOT_FOUND`); bundled, only what main uses (`currentSearchPath` for now) is included.
+
+**Rationale:** the first run of the app with a runtime import of core is what showed it, and the e2e launch test caught it. Core has no runtime dependencies, so bundling it costs nothing else.
