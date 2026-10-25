@@ -1,8 +1,24 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron';
-import { join } from 'path';
-import { electronApp, optimizer, is } from '@electron-toolkit/utils';
+import { mkdirSync } from 'node:fs';
+import { userInfo } from 'node:os';
+import { join } from 'node:path';
+import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron';
+import { electronApp, is, optimizer } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
+import type { EmitEvent } from './ipc/deps';
 import { registerAllIpc } from './ipc';
+import { createLogger, fileSink } from './log';
+import { resolveAppPaths } from './paths';
+import { createSession } from './session';
+import { openConnection } from './services/connection';
+import { createSecrets } from './services/secrets';
+import { createConnectionsRepo } from './store/connections';
+import { openAppDb } from './store/db';
+
+// Before anything else: where the app keeps its files, which is also Electron's user data folder,
+// and the folder the single-instance lock belongs to.
+const paths = resolveAppPaths();
+mkdirSync(paths.dataDir, { recursive: true, mode: 0o700 });
+app.setPath('userData', paths.dataDir);
 
 function createWindow(): void {
   // Create the browser window.
@@ -36,30 +52,64 @@ function createWindow(): void {
   }
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
-  // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron');
+const emit: EmitEvent = (event, ...payload) => {
+  for (const window of BrowserWindow.getAllWindows())
+    window.webContents.send(event, ...payload);
+};
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
-  app.on('browser-window-created', (_, window) => {
-    optimizer.watchWindowShortcuts(window);
+// A second launch with the same data folder hands over to the first and exits, so two windows
+// can't overwrite each other's drafts.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  const session = createSession();
+
+  app.on('second-instance', () => {
+    const [window] = BrowserWindow.getAllWindows();
+    if (!window) return;
+    if (window.isMinimized()) window.restore();
+    window.focus();
   });
 
-  registerAllIpc(ipcMain);
+  // This method will be called when Electron has finished
+  // initialization and is ready to create browser windows.
+  // Some APIs can only be used after this event occurs.
+  app.whenReady().then(() => {
+    // Set app user model id for windows
+    electronApp.setAppUserModelId('com.electron');
 
-  createWindow();
+    // Default open or close DevTools by F12 in development
+    // and ignore CommandOrControl + R in production.
+    // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
+    app.on('browser-window-created', (_, window) => {
+      optimizer.watchWindowShortcuts(window);
+    });
 
-  app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    const log = createLogger({ write: fileSink(paths.logFile) });
+    registerAllIpc(ipcMain, {
+      connections: createConnectionsRepo(openAppDb(paths.dbFile)),
+      secrets: createSecrets(safeStorage, () => app.isReady()),
+      session,
+      emit,
+      open: openConnection,
+      osUser: userInfo().username,
+      socketPath: '/var/run/postgresql',
+    });
+    log.info('pgsketch started', { dataDir: paths.dataDir });
+
+    createWindow();
+
+    app.on('activate', function () {
+      // On macOS it's common to re-create a window in the app when the
+      // dock icon is clicked and there are no other windows open.
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
   });
-});
+
+  app.on('before-quit', () => {
+    void session.close();
+  });
+}
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
@@ -69,6 +119,3 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.

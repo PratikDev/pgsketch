@@ -4,7 +4,8 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
-  main: {},
+  // core is TypeScript source in the workspace, so it is bundled into the main process
+  main: { build: { externalizeDeps: { exclude: ['@pgsketch/core'] } } },
   // a sandboxed preload can't require packages, so zod is bundled into it
   preload: { build: { externalizeDeps: false } },
   renderer: {
