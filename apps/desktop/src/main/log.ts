@@ -134,5 +134,3 @@ export function fileSink(path: string): (line: string) => void {
     appendFileSync(path, `${line}\n`, { mode: 0o600 });
   };
 }
-
-export const log = createLogger({ write: fileSink(defaultLogPath()) });
