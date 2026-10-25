@@ -741,15 +741,15 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | H3 | `fast-check` arbitraries for models and edits | `test/arbitraries.ts` | *DB*: property test, 200 runs, every generated edit round-trips | done |
 | H4 | Expression normalization on its own connection, whole-table temp copy, extended protocol, TEMP fallback | `normalize/expression.ts` | *DB*: `CURRENT_TIMESTAMP` and `now()` normalize alike; an unqualified `uuid_generate_v4()` from an extension in `public` comes back as `public.uuid_generate_v4()`; `end_date > start_date` normalizes; `1); COMMIT; …` fails; a role without TEMP gets the fallback | done |
 | H5 | Normalization used by round trips so defaults compare cleanly | `test/roundtrip.ts` | *DB*: round trips with custom defaults produce no phantom diff | done |
-| H6 | Nightly property run with 2,000 cases across Postgres 14–18 | `.github/workflows/nightly.yml` | A manual trigger of the workflow passes | working |
+| H6 | Nightly property run with 2,000 cases across Postgres 14–18 | `.github/workflows/nightly.yml` | A manual trigger of the workflow passes | done |
 
 ### I. Desktop main process foundation
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| I1 | All IPC channel names and zod schemas | `shared/ipc-contract.ts` | Valid inputs parse; malformed ones are rejected | todo |
-| I2 | Generic IPC register helper, domain registry, typed preload bridge | `main/ipc/register.ts`, `main/ipc/index.ts`, `preload/index.ts` | A `ping` channel round-trips; an invalid payload is rejected in main | todo |
-| I3 | Logger with password and connection-string redaction | `main/log.ts` | A logged URL has its password removed | todo |
+| I1 | All IPC channel names and zod schemas | `shared/ipc-contract.ts` | Valid inputs parse; malformed ones are rejected | done |
+| I2 | Generic IPC register helper, domain registry, typed preload bridge | `main/ipc/register.ts`, `main/ipc/index.ts`, `preload/index.ts` | A `ping` channel round-trips; an invalid payload is rejected in main | done |
+| I3 | Logger with password and connection-string redaction | `main/log.ts` | A logged URL has its password removed | done |
 | I4 | App database with migrations | `store/db.ts`, `store/migrations/001_init.sql` | Temp database reaches `user_version = 1` with all four tables and the SSL and URL columns | todo |
 | I5 | Connections repository | `store/connections.ts` | Insert, list by recency, delete; URL stored without password or `sslmode` | todo |
 | I6 | Secrets with keyring backend check | `services/secrets.ts` | With `basic_text` or `unknown` mocked, remembering a password is refused; the check never runs before `ready` | todo |
