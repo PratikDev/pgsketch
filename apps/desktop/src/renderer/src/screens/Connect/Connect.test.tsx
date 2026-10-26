@@ -179,6 +179,36 @@ describe('connecting', () => {
     expect(field('Database')).toHaveValue('app');
   });
 
+  test('a failure can be tried again without changing anything, and clears when a field is edited', async () => {
+    const results: OpenResult[] = [
+      { status: 'failed', message: 'Host not found' },
+      { status: 'opened', session },
+    ];
+    const { user, calls, onOpened } = setup({ open: () => results.shift()! });
+    await user.type(field('Database'), 'app');
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
+    expect(await screen.findByText('Host not found')).toBeInTheDocument();
+
+    await user.type(field('Database'), 'x');
+    expect(screen.queryByText('Host not found')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
+    await waitFor(() => expect(onOpened).toHaveBeenCalledWith(session));
+    expect(opens(calls)).toHaveLength(2);
+  });
+
+  test('the same failure again, with nothing edited, is shown again', async () => {
+    const { user, calls } = setup({
+      open: () => ({ status: 'failed', message: 'Host not found' }),
+    });
+    await user.type(field('Database'), 'app');
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
+    expect(await screen.findByText('Host not found')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
+    await waitFor(() => expect(opens(calls)).toHaveLength(2));
+    expect(await screen.findByText('Host not found')).toBeInTheDocument();
+  });
+
   test('while connecting the button says so and cannot be pressed again', async () => {
     let finish: (r: OpenResult) => void = () => undefined;
     installFakeApi({

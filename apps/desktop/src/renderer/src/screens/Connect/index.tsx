@@ -2,10 +2,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
+import { Field, FieldLabel } from '@/components/ui/field';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import type { SessionInfo } from '../../../../shared/ipc-contract';
-import type { Mode } from './connect-form';
+import type { Mode } from './connect-schema';
 import { ConnectionFields } from './ConnectionFields';
 import { RecentConnections } from './RecentConnections';
 import { SslFields } from './SslFields';
@@ -23,7 +23,7 @@ export function Connect({
   onOpened: (session: SessionInfo) => void;
 }) {
   const screen = useConnectScreen(onOpened);
-  const { state, errors, busy } = screen;
+  const { form, defaults, busy } = screen;
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <Card className="w-full max-w-xl">
@@ -43,41 +43,57 @@ export function Connect({
             noValidate
             onSubmit={(e) => {
               e.preventDefault();
-              screen.submit();
+              void form.handleSubmit();
             }}
           >
-            <Tabs
-              value={state.mode}
-              onValueChange={(value) => {
-                const picked = MODES.find((m) => m.mode === value);
-                if (picked) screen.changeMode(picked.mode);
+            <form.Field
+              name="mode"
+              listeners={{
+                // the local socket is let in by the operating system user, so there is no password
+                onChange: ({ value, fieldApi }) => {
+                  if (value !== 'socket') return;
+                  fieldApi.form.setFieldValue('host', defaults.socketPath);
+                  fieldApi.form.setFieldValue('user', defaults.osUser);
+                  fieldApi.form.setFieldValue('password', '');
+                },
               }}
             >
-              <TabsList>
-                {MODES.map(({ mode, label }) => (
-                  <TabsTrigger key={mode} value={mode}>
-                    {label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            <ConnectionFields
-              state={state}
-              errors={errors}
-              onChange={screen.change}
-              onUrlChange={screen.changeUrl}
-            />
-            <SslFields state={state} errors={errors} onChange={screen.change} />
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="remember"
-                checked={state.remember}
-                onCheckedChange={(checked) =>
-                  screen.change({ remember: checked === true })
-                }
-              />
-              <Label htmlFor="remember">Remember this connection</Label>
-            </div>
+              {(field) => (
+                <Tabs
+                  value={field.state.value}
+                  onValueChange={(value) => {
+                    const picked = MODES.find((m) => m.mode === value);
+                    if (picked) field.handleChange(picked.mode);
+                  }}
+                >
+                  <TabsList>
+                    {MODES.map(({ mode, label }) => (
+                      <TabsTrigger key={mode} value={mode}>
+                        {label}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                </Tabs>
+              )}
+            </form.Field>
+            <ConnectionFields form={form} />
+            <SslFields form={form} />
+            <form.Field name="remember">
+              {(field) => (
+                <Field orientation="horizontal">
+                  <Checkbox
+                    id="remember"
+                    checked={field.state.value}
+                    onCheckedChange={(checked) =>
+                      field.handleChange(checked === true)
+                    }
+                  />
+                  <FieldLabel htmlFor="remember">
+                    Remember this connection
+                  </FieldLabel>
+                </Field>
+              )}
+            </form.Field>
             {screen.message !== null && (
               <Alert variant="destructive">
                 <AlertDescription>{screen.message}</AlertDescription>

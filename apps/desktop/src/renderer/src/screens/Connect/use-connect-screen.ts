@@ -1,20 +1,13 @@
-import { useEffect, useState } from 'react';
 import { api } from '@/api';
+import { useForm, useSelector } from '@tanstack/react-form';
+import { useEffect, useState } from 'react';
 import type {
   ConnectionDefaults,
   OpenResult,
   SavedConnection,
   SessionInfo,
 } from '../../../../shared/ipc-contract';
-import {
-  initialState,
-  validate,
-  withMode,
-  withUrl,
-  type FieldErrors,
-  type FormState,
-  type Mode,
-} from './connect-form';
+import { connectSchema, initialValues } from './connect-schema';
 
 /** Used until the main process answers, and if it never does. */
 const FALLBACK_DEFAULTS: ConnectionDefaults = {
@@ -22,14 +15,38 @@ const FALLBACK_DEFAULTS: ConnectionDefaults = {
   socketPath: '/var/run/postgresql',
 };
 
-/** The Connect screen's state: the form, the recent connections, and opening one. */
+/**
+ * The message a failed connection left on the form, if there is one. The form's own errors are the
+ * schema's, which are objects keyed by field; a message set by hand is a string.
+ */
+const serverMessage = (errors: readonly unknown[]): string | null =>
+  errors.find((error): error is string => typeof error === 'string') ?? null;
+
+/** The Connect screen: its form, the recent connections, and opening one. */
 export function useConnectScreen(onOpened: (session: SessionInfo) => void) {
-  const [state, setState] = useState<FormState>(initialState);
   const [defaults, setDefaults] = useState(FALLBACK_DEFAULTS);
   const [recent, setRecent] = useState<SavedConnection[]>([]);
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [message, setMessage] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [openingRecent, setOpeningRecent] = useState(false);
+
+  const form = useForm({
+    defaultValues: initialValues,
+    validators: { onSubmit: connectSchema },
+    onSubmit: async ({ value, formApi }) => {
+      // the form hands over what was typed; the schema turns it into the connection parameters
+      const { params, remember } = connectSchema.parse(value);
+      const result = await api.connection.open(params, remember);
+      showResult(result, formApi.setErrorMap);
+    },
+  });
+
+  /** Leaves the screen when the database opened, otherwise puts the reason on the form. */
+  function showResult(
+    result: OpenResult,
+    setErrorMap: typeof form.setErrorMap,
+  ): void {
+    if (result.status === 'opened') return onOpened(result.session);
+    setErrorMap({ onSubmit: { form: result.message, fields: {} } });
+  }
 
   useEffect(() => {
     let current = true;
@@ -46,44 +63,34 @@ export function useConnectScreen(onOpened: (session: SessionInfo) => void) {
     };
   }, []);
 
-  /** Runs an open call; on success the screen is left, otherwise the reason is shown. */
-  async function run(open: () => Promise<OpenResult>): Promise<void> {
-    setBusy(true);
-    setMessage(null);
-    try {
-      const result = await open();
-      if (result.status === 'opened') return onOpened(result.session);
-      setMessage(result.message);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
-    }
-    setBusy(false);
-  }
+  const submitting = useSelector(form.store, (s) => s.isSubmitting);
+  const message = useSelector(form.store, (s) => serverMessage(s.errors));
 
   return {
-    state,
-    errors,
-    message,
-    busy,
+    form,
+    defaults,
     recent,
-    change: (change: Partial<FormState>) => {
-      setState((s) => ({ ...s, ...change }));
-      setErrors({});
+    message,
+    busy: submitting || openingRecent,
+    openRecent: async (connectionId: string): Promise<void> => {
+      form.setErrorMap({ onSubmit: undefined });
+      setOpeningRecent(true);
+      try {
+        showResult(
+          await api.connection.openSaved(connectionId),
+          form.setErrorMap,
+        );
+      } catch (error) {
+        form.setErrorMap({
+          onSubmit: {
+            form: error instanceof Error ? error.message : String(error),
+            fields: {},
+          },
+        });
+      }
+      setOpeningRecent(false);
     },
-    changeUrl: (url: string) => {
-      setState((s) => withUrl(s, url));
-      setErrors({});
-    },
-    changeMode: (mode: Mode) => {
-      setState((s) => withMode(s, mode, defaults));
-      setErrors({});
-    },
-    submit: () => {
-      const result = validate(state);
-      if ('errors' in result) return setErrors(result.errors);
-      void run(() => api.connection.open(result.params, state.remember));
-    },
-    openRecent: (connectionId: string) =>
-      void run(() => api.connection.openSaved(connectionId)),
   };
 }
+
+export type ConnectForm = ReturnType<typeof useConnectScreen>['form'];

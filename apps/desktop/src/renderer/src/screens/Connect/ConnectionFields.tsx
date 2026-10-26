@@ -1,83 +1,92 @@
-import { TextField } from '@/components/TextField';
-import type { FieldErrors, FormState } from './connect-form';
-
-interface Props {
-  state: FormState;
-  errors: FieldErrors;
-  onChange: (change: Partial<FormState>) => void;
-  onUrlChange: (url: string) => void;
-}
+import { FormTextField } from '@/components/FormTextField';
+import { FieldGroup } from '@/components/ui/field';
+import { useSelector } from '@tanstack/react-form';
+import { takeSslMode } from './connect-schema';
+import type { ConnectForm } from './use-connect-screen';
 
 /** The fields for how to reach the server, which depend on the mode. */
-export function ConnectionFields({
-  state,
-  errors,
-  onChange,
-  onUrlChange,
-}: Props) {
-  if (state.mode === 'url') {
+export function ConnectionFields({ form }: { form: ConnectForm }) {
+  const mode = useSelector(form.store, (s) => s.values.mode);
+
+  if (mode === 'url') {
     return (
-      <TextField
-        id="connection-string"
-        label="Connection string"
-        placeholder="postgresql://user:password@host:5432/database"
-        autoComplete="off"
-        spellCheck={false}
-        value={state.url}
-        error={errors.url}
-        onChange={(e) => onUrlChange(e.target.value)}
-      />
+      <form.Field
+        name="url"
+        listeners={{
+          // a pasted string's sslmode moves to the selector, and is taken out of the text
+          onChange: ({ value, fieldApi }) => {
+            const taken = takeSslMode(value);
+            if (!taken) return;
+            fieldApi.form.setFieldValue('url', taken.text);
+            if (taken.sslMode)
+              fieldApi.form.setFieldValue('sslMode', taken.sslMode);
+          },
+        }}
+      >
+        {(field) => (
+          <FormTextField
+            field={field}
+            label="Connection string"
+            placeholder="postgresql://user:password@host:5432/database"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        )}
+      </form.Field>
     );
   }
-  const socket = state.mode === 'socket';
+
+  const socket = mode === 'socket';
   return (
-    <div className="flex flex-col gap-4">
+    <FieldGroup>
       <div className="grid grid-cols-[1fr_7rem] gap-3">
-        <TextField
-          id="host"
-          label={socket ? 'Socket directory' : 'Host'}
-          spellCheck={false}
-          value={state.host}
-          error={errors.host}
-          onChange={(e) => onChange({ host: e.target.value })}
-        />
-        <TextField
-          id="port"
-          label="Port"
-          inputMode="numeric"
-          value={state.port}
-          error={errors.port}
-          onChange={(e) => onChange({ port: e.target.value })}
-        />
+        <form.Field name="host">
+          {(field) => (
+            <FormTextField
+              field={field}
+              label={socket ? 'Socket directory' : 'Host'}
+              spellCheck={false}
+            />
+          )}
+        </form.Field>
+        <form.Field name="port">
+          {(field) => (
+            <FormTextField field={field} label="Port" inputMode="numeric" />
+          )}
+        </form.Field>
       </div>
-      <TextField
-        id="user"
-        label="User"
-        autoComplete="off"
-        spellCheck={false}
-        value={state.user}
-        error={errors.user}
-        onChange={(e) => onChange({ user: e.target.value })}
-      />
+      <form.Field name="user">
+        {(field) => (
+          <FormTextField
+            field={field}
+            label="User"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        )}
+      </form.Field>
       {!socket && (
-        <TextField
-          id="password"
-          label="Password"
-          type="password"
-          autoComplete="off"
-          value={state.password}
-          onChange={(e) => onChange({ password: e.target.value })}
-        />
+        <form.Field name="password">
+          {(field) => (
+            <FormTextField
+              field={field}
+              label="Password"
+              type="password"
+              autoComplete="off"
+            />
+          )}
+        </form.Field>
       )}
-      <TextField
-        id="database"
-        label="Database"
-        autoComplete="off"
-        spellCheck={false}
-        value={state.database}
-        error={errors.database}
-        onChange={(e) => onChange({ database: e.target.value })}
-      />
-    </div>
+      <form.Field name="database">
+        {(field) => (
+          <FormTextField
+            field={field}
+            label="Database"
+            autoComplete="off"
+            spellCheck={false}
+          />
+        )}
+      </form.Field>
+    </FieldGroup>
   );
 }

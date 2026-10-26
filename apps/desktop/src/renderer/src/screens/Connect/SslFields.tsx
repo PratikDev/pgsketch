@@ -1,5 +1,10 @@
-import { TextField } from '@/components/TextField';
-import { Label } from '@/components/ui/label';
+import { FormTextField } from '@/components/FormTextField';
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from '@/components/ui/field';
 import {
   Select,
   SelectContent,
@@ -7,12 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useSelector } from '@tanstack/react-form';
 import { SSL_MODES, type SslMode } from '../../../../shared/ipc-contract';
-import {
-  effectiveSslMode,
-  type FieldErrors,
-  type FormState,
-} from './connect-form';
+import { effectiveSslMode } from './connect-schema';
+import type { ConnectForm } from './use-connect-screen';
 
 /** What each mode means, shown under the selector. */
 const NOTES: Record<SslMode, string> = {
@@ -22,49 +25,49 @@ const NOTES: Record<SslMode, string> = {
   'verify-full': 'Encrypted, and the certificate and host name are checked.',
 };
 
-interface Props {
-  state: FormState;
-  errors: FieldErrors;
-  onChange: (change: Partial<FormState>) => void;
-}
-
-export function SslFields({ state, errors, onChange }: Props) {
-  const mode = effectiveSslMode(state);
+export function SslFields({ form }: { form: ConnectForm }) {
+  // until one is picked the form holds null, and what is shown follows the host
+  const mode = useSelector(form.store, (s) => effectiveSslMode(s.values));
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="ssl-mode">SSL mode</Label>
-        <Select
-          value={mode}
-          onValueChange={(value) => {
-            const picked = SSL_MODES.find((m) => m === value);
-            if (picked) onChange({ sslMode: picked });
-          }}
-        >
-          <SelectTrigger id="ssl-mode" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {SSL_MODES.map((m) => (
-              <SelectItem key={m} value={m}>
-                {m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-sm text-muted-foreground">{NOTES[mode]}</p>
-      </div>
+    <FieldGroup>
+      <form.Field name="sslMode">
+        {(field) => (
+          <Field>
+            <FieldLabel htmlFor="ssl-mode">SSL mode</FieldLabel>
+            <Select
+              value={mode}
+              onValueChange={(value) => {
+                const picked = SSL_MODES.find((m) => m === value);
+                if (picked) field.handleChange(picked);
+              }}
+            >
+              <SelectTrigger id="ssl-mode" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SSL_MODES.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldDescription>{NOTES[mode]}</FieldDescription>
+          </Field>
+        )}
+      </form.Field>
       {mode === 'verify-full' && (
-        <TextField
-          id="ssl-ca"
-          label="CA certificate file"
-          placeholder="/path/to/ca.pem"
-          spellCheck={false}
-          value={state.sslCaPath}
-          error={errors.sslCaPath}
-          onChange={(e) => onChange({ sslCaPath: e.target.value })}
-        />
+        <form.Field name="sslCaPath">
+          {(field) => (
+            <FormTextField
+              field={field}
+              label="CA certificate file"
+              placeholder="/path/to/ca.pem"
+              spellCheck={false}
+            />
+          )}
+        </form.Field>
       )}
-    </div>
+    </FieldGroup>
   );
 }
