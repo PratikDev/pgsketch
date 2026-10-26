@@ -18,7 +18,7 @@ async function fillForm(window: Page, password: string): Promise<void> {
   await window.getByLabel('Host').fill(server.host);
   await window.getByLabel('Port').fill(String(server.port));
   await window.getByLabel('User').fill(E2E_USER);
-  await window.getByLabel('Password').fill(password);
+  await window.getByLabel('Password', { exact: true }).fill(password);
   await window.getByLabel('Database').fill(server.database);
   await window.getByRole('button', { name: 'Connect' }).click();
 }
