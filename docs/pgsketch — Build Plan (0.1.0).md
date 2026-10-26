@@ -763,9 +763,9 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| J1 | Typed renderer API client, screen switching, placeholder Editor screen | `renderer/api.ts`, `renderer/App.tsx`, `screens/Editor.tsx` | App shows Connect by default and can switch to the placeholder Editor | todo |
-| J2 | Connect form: params, URL and socket modes, SSL mode with defaults, OS-username default for sockets, zod validation | `screens/Connect.tsx` | Component test: socket mode fills the OS username; a remote host defaults to `require` | todo |
-| J3 | Submit, mapped error display, recent connections via `openSaved`, remember | `screens/Connect.tsx` | E2E: wrong password shows the message; success opens the Editor screen | todo |
+| J1 | Typed renderer API client, screen switching, placeholder Editor screen | `renderer/api.ts`, `renderer/App.tsx`, `screens/Editor.tsx` | App shows Connect by default and can switch to the placeholder Editor | done |
+| J2 | Connect form: params, URL and socket modes, SSL mode with defaults, OS-username default for sockets, zod validation | `screens/Connect.tsx` | Component test: socket mode fills the OS username; a remote host defaults to `require` | done |
+| J3 | Submit, mapped error display, recent connections via `openSaved`, remember | `screens/Connect.tsx` | E2E: wrong password shows the message; success opens the Editor screen | done |
 
 ### K. Schema loading and editor state
 
