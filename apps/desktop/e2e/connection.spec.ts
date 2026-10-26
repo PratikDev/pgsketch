@@ -3,22 +3,18 @@ import { userInfo } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from '@playwright/test';
-import { startServer, type TestServer } from '../test/postgres';
+import type { TestServer } from '../test/postgres';
 import { launchApp, launchWithKeyring } from './app';
+import {
+  E2E_PASSWORD as PASSWORD,
+  E2E_USER as USER,
+  startE2eServer,
+} from './server';
 
 let server: TestServer;
-// the container's own user, password and database are all "test", which is no use for
-// checking that a password never shows up somewhere
-const USER = 'e2e_user';
-const PASSWORD = 'pw-9f3c1d7a-e2e';
-
 test.beforeAll(async () => {
   test.setTimeout(120_000);
-  server = await startServer(process.env.PG_VERSION ?? '16');
-  await server.admin.query(`CREATE ROLE ${USER} LOGIN PASSWORD '${PASSWORD}'`);
-  await server.admin.query(
-    `GRANT CONNECT ON DATABASE ${server.database} TO ${USER}`,
-  );
+  server = await startE2eServer();
 });
 
 test.afterAll(async () => {
