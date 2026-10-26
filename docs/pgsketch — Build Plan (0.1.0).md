@@ -351,9 +351,11 @@ Events from main to renderer: `schema:changed`, `connection:lost`.
 
 ### Connection screen
 
-- Fields: host (default `localhost`), port (`5432`), user (`postgres`), password, database, SSL mode. A toggle switches to a single connection-string field. A "Local socket" option sets the host to `/var/run/postgresql`, clears the password, and sets the user to the OS username, since peer authentication matches the OS user.
+- Fields: host (default `localhost`), port (`5432`), user (`postgres`), password, database, SSL mode. The password field has a show/hide toggle (an eye icon). A toggle switches to a single connection-string field. A "Local socket" option sets the host to `/var/run/postgresql`, clears the password, and sets the user to the OS username, since peer authentication matches the OS user.
 - SSL mode, with libpq meanings: `disable`; `prefer` (try SSL, fall back to plaintext if the server refuses it); `require` (encrypted, but the server isn't verified, which the form notes); `verify-full` (asks for a CA certificate file and verifies the certificate and hostname). Defaults to `disable` for local hosts and sockets and `require` for anything else. The app builds `pg`'s `ssl` option itself and never passes `sslmode` to `pg`, whose parser currently treats the weaker modes as `verify-full` and plans to change that.
-- A pasted connection string is parsed into fields; its `sslmode`, if any, sets the selector and is removed from the string. From then on, the selector alone decides.
+- A pasted connection string keeps its own field; its `sslmode`, if any, sets the selector and is removed from the text. From then on, the selector alone decides.
+- An empty password is sent as no password, because servers with `trust` authentication (and `peer` on a socket) need none. If the server does ask for one, its own message is shown as it is.
+- The form is a TanStack Form (`useForm`) validated on submit by one zod schema, a union by mode, with a message for each field; the schema also produces the connection parameters, which the form gets by parsing the values in its submit handler (TanStack passes the raw values on). Fields that react to each other use field listeners, not hand-made handlers: choosing the socket mode fills the host and the operating system user and clears the password, and a pasted connection string moves its `sslmode` into the selector. The SSL default that follows the host until a mode is picked is not a listener: the form keeps "not picked" and the shown value is worked out from the host. A failure from `connection.open` or `openSaved` is set as the form's error and clears on the next edit.
 - "Remember" saves the connection; the password is stored encrypted, separately.
 - Recent connections are listed above the form; clicking one calls `connection.openSaved` with its ID.
 - Errors are mapped from driver errors:
@@ -570,7 +572,8 @@ A pnpm monorepo with two workspaces: `packages/core` (pure TypeScript) and `apps
 | Positioning | Radix Popover (Floating UI) | Portaled popovers |
 | SQL view | CodeMirror 6 + `@codemirror/lang-sql` | SQL preview, expression inputs |
 | Postgres | `pg` (node-postgres) | Main and task connections, SSL, introspection, validate. Pinned to an exact version, since `queryMode` is undocumented |
-| Validation | zod | IPC inputs, connection forms |
+| Forms | `@tanstack/react-form` with shadcn `Field` | Connect form and later forms: schema validation on submit, field listeners for fields that react to each other |
+| Validation | zod | IPC inputs, and the schemas the forms validate with |
 | App data | `node:sqlite` | Connections, drafts, layouts, settings |
 | Secrets | Electron `safeStorage` | Passwords |
 | Unit tests | Vitest | Core logic, stores |
@@ -619,7 +622,9 @@ pgsketch/
       preload/      index.ts
       renderer/
         main.tsx · App.tsx · api.ts · test-setup.ts
-        screens/    Connect.tsx · Editor.tsx
+        components/ FormTextField.tsx · PasswordInput.tsx · ui/ (shadcn)
+        screens/    Connect/ (index.tsx · use-connect-screen.ts · connect-schema.ts · ConnectionFields.tsx
+                    SslFields.tsx · RecentConnections.tsx) · Editor.tsx
         stores/     schema/ (core.ts · tables.ts · columns.ts · constraints.ts · schemas.ts)
                     ui.ts · layout.ts · derived.ts · persistence.ts
         canvas/     Canvas.tsx · TableNode.tsx · ColumnRow.tsx · NodeFooter.tsx · TableToolbar.tsx
@@ -635,7 +640,7 @@ pgsketch/
 
 ## Build phases
 
-The build is 121 thin phases in 16 milestones; each phase changes at most three source files and ends with a passing test and a commit.
+The build is 125 thin phases in 16 milestones; each phase changes at most three source files and ends with a passing test and a commit.
 
 **Rules for every phase:**
 
@@ -764,8 +769,14 @@ All unit tests: two hand-built models in, expected `ChangeOp[]` out.
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
 | J1 | Typed renderer API client, screen switching, placeholder Editor screen | `renderer/api.ts`, `renderer/App.tsx`, `screens/Editor.tsx` | App shows Connect by default and can switch to the placeholder Editor | done |
-| J2 | Connect form: params, URL and socket modes, SSL mode with defaults, OS-username default for sockets, zod validation | `screens/Connect.tsx` | Component test: socket mode fills the OS username; a remote host defaults to `require` | done |
-| J3 | Submit, mapped error display, recent connections via `openSaved`, remember | `screens/Connect.tsx` | E2E: wrong password shows the message; success opens the Editor screen | done |
+| J2 | Connect form: params, URL and socket modes, SSL mode with defaults, OS-username default for sockets, zod validation | `screens/Connect/` | Component test: socket mode fills the OS username; a remote host defaults to `require` | done |
+| J3 | Submit, mapped error display, recent connections via `openSaved`, remember | `screens/Connect/` | E2E: wrong password shows the message; success opens the Editor screen | done |
+| J4 | Show/hide toggle on password fields | `components/PasswordInput.tsx`, `components/TextField.tsx` | Component test: a password field is masked, one click on "Show password" reveals it and a second hides it again; other fields have no toggle | done |
+| J5 | Connect schema: one zod union by mode that checks each field with its message and produces the connection parameters, with the SSL default helpers | `screens/Connect/connect-schema.ts` | Unit: each missing or bad field has its message; an empty password gives no password; a URL gives its database; `verify-full` needs a CA file | done |
+| J6 | TanStack Form field component: shadcn `Field` with the label, the input (password toggle included) and the error of a form field | `components/FormTextField.tsx` | Component test: the error shows only once the field is touched and invalid; the label and `aria-invalid` are set | done |
+| J7 | Connect form on TanStack Form: `useForm` with the J5 schema, field listeners (socket mode fills the host and user, a pasted URL moves its `sslmode` into the selector), SSL display worked out from the host, submit and server errors through the form; replaces the hand-made state and `validate()` | `screens/Connect/use-connect-screen.ts`, `screens/Connect/index.tsx`, `screens/Connect/ConnectionFields.tsx`, `screens/Connect/SslFields.tsx` | The J2 and J3 component and E2E tests still pass; component test: pasting a string with `sslmode` sets the selector through the listener | done |
+
+J7 changes four files, and deletes the old `connect-form.ts` and `TextField.tsx`, because the hand-made form and the TanStack one can't both drive the same fields.
 
 ### K. Schema loading and editor state
 
