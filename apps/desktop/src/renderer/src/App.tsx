@@ -1,10 +1,20 @@
-import { Button } from '@/components/ui/button';
+import { useState } from 'react';
+import { api } from '@/api';
+import { Connect } from '@/screens/Connect';
+import { Editor } from '@/screens/Editor';
+import type { SessionInfo } from '../../shared/ipc-contract';
 
 function App(): React.JSX.Element {
+  // the open database, or none: the Connect screen shows until one is open
+  const [session, setSession] = useState<SessionInfo | null>(null);
+  if (session === null) return <Connect onOpened={setSession} />;
   return (
-    <div className="flex h-screen items-center justify-center">
-      <Button>pgsketch</Button>
-    </div>
+    <Editor
+      session={session}
+      onDisconnect={() => {
+        void api.connection.close().finally(() => setSession(null));
+      }}
+    />
   );
 }
 
