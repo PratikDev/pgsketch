@@ -1,12 +1,11 @@
 import { createHash } from 'node:crypto';
+import { isLocalHost } from '../../shared/hosts';
 import type {
   ConnectionParams,
   SavedConnection,
   SessionInfo,
 } from '../../shared/ipc-contract';
 import { clientConfigFor } from './connection';
-
-const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1', '[::1]'];
 
 /** The host and port a connection goes to, as messages and keys name them. */
 export function targetOf(params: ConnectionParams) {
@@ -18,7 +17,7 @@ export function hostKindOf(params: ConnectionParams): SessionInfo['hostKind'] {
   if (params.kind === 'socket') return 'socket';
   const { host } = targetOf(params);
   if (host.startsWith('/')) return 'socket';
-  return LOCAL_HOSTS.includes(host.toLowerCase()) ? 'local' : 'remote';
+  return isLocalHost(host) ? 'local' : 'remote';
 }
 
 /**
