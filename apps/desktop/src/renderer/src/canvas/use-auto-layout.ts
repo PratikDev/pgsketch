@@ -1,6 +1,7 @@
-import type { Id, SchemaModel } from '@pgsketch/core';
+import type { SchemaModel } from '@pgsketch/core';
 import { useEffect, useState } from 'react';
-import { autoLayout, type LayoutLink, type Point } from '@/layout/autoLayout';
+import { autoLayout, type LayoutLink } from '@/layout/autoLayout';
+import { layoutStore, useLayoutStore } from '@/stores/layout';
 import type { TableView } from './model-view';
 
 export type LayoutStatus = 'pending' | 'ready' | 'failed';
@@ -24,28 +25,37 @@ function linksOf(model: SchemaModel): LayoutLink[] {
 }
 
 /**
- * Positions for the tables that have none, from the auto-layout (which runs in a worker): the
- * whole graph is laid out and only the new tables take their place, so a table that is already
- * somewhere stays there. Until it answers, and if it can't, tables are left to the caller's
- * fallback.
+ * Puts the tables that have no saved position somewhere, with the auto-layout (which runs in a
+ * worker): the whole graph is laid out and only the new tables take their place, so a table that
+ * is already somewhere stays there. It waits until the saved positions have been read. Until it
+ * answers, and if it can't, those tables are left to the caller's fallback.
  */
 export function useAutoLayout(
   model: SchemaModel,
   views: TableView[],
-): { positions: Record<Id, Point>; status: LayoutStatus } {
-  const [positions, setPositions] = useState<Record<Id, Point>>({});
+): LayoutStatus {
+  const positions = useLayoutStore((s) => s.positions);
+  const loaded = useLayoutStore((s) => s.loaded);
   const [failed, setFailed] = useState(false);
   const missing = views.filter((v) => !positions[v.id]).map((v) => v.id);
 
   useEffect(() => {
-    if (missing.length === 0 || failed) return;
+    if (!loaded || missing.length === 0 || failed) return;
     let current = true;
     autoLayout(
       views.map((v) => ({ id: v.id, columnIds: v.columns.map((c) => c.id) })),
       linksOf(model),
     ).then(
       (laidOut) => {
-        if (current) setPositions((old) => ({ ...laidOut, ...old }));
+        if (!current) return;
+        const wanted = new Set(missing);
+        layoutStore
+          .getState()
+          .place(
+            Object.fromEntries(
+              Object.entries(laidOut).filter(([id]) => wanted.has(id)),
+            ),
+          );
       },
       () => current && setFailed(true),
     );
@@ -53,10 +63,11 @@ export function useAutoLayout(
       current = false;
     };
     // only when a table without a position appears, not on every edit of what is already placed
-  }, [missing.join(), failed]);
+  }, [loaded, missing.join(), failed]);
 
-  return {
-    positions,
-    status: failed ? 'failed' : missing.length > 0 ? 'pending' : 'ready',
-  };
+  return failed
+    ? 'failed'
+    : !loaded || missing.length > 0
+      ? 'pending'
+      : 'ready';
 }

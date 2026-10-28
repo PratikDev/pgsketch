@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Canvas } from '@/canvas/Canvas';
+import { layoutStore } from '@/stores/layout';
 import type { SessionInfo } from '../../../../shared/ipc-contract';
 import { useLoadSchema } from './use-load-schema';
 
@@ -12,7 +14,9 @@ export function Editor({
   session: SessionInfo;
   onDisconnect: () => void;
 }) {
-  const load = useLoadSchema();
+  const load = useLoadSchema(session.dbKey);
+  // positions moved a moment ago are saved before the Editor goes
+  useEffect(() => () => void layoutStore.getState().flush(), []);
   return (
     <main className="flex h-screen flex-col">
       <header className="flex items-center gap-4 border-b border-border px-4 py-2">

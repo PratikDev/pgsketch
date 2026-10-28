@@ -4,14 +4,30 @@ import ELK from 'elkjs/lib/elk.bundled.js';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { fixtureModel } from '@/test-model';
 import { emptyModel } from '@/stores/schema/core';
+import { layoutStore } from '@/stores/layout';
 import { schemaStore } from '@/stores/schema';
+import { installFakeApi } from '@/test-utils';
 import { Canvas } from './Canvas';
 
 const casts = { categories: {}, domains: {}, casts: {} };
-const load = (model = fixtureModel) =>
+const saved = vi.hoisted(() => ({
+  positions: {} as Record<string, { x: number; y: number }>,
+}));
+const load = async (model = fixtureModel) => {
+  installFakeApi({
+    'layout.get': () => saved.positions,
+    'layout.put': () => undefined,
+  });
   act(() => schemaStore.getState().load({ model, casts, fingerprint: 'f' }));
+  await act(() =>
+    layoutStore.getState().restore('k', Object.keys(model.tables)),
+  );
+};
 
-afterEach(() => load(emptyModel()));
+afterEach(async () => {
+  saved.positions = {};
+  await load(emptyModel());
+});
 
 /** The real layout, run in this thread instead of a worker, or made to fail. */
 const elk = new ELK();
@@ -41,8 +57,8 @@ const tableNames = () =>
     .map((r) => r.getAttribute('aria-label'));
 
 describe('Canvas', () => {
-  test('draws one node for every table of the loaded schema', () => {
-    load();
+  test('draws one node for every table of the loaded schema', async () => {
+    await load();
     const { container } = render(
       <div style={{ width: 800, height: 600 }}>
         <Canvas />
@@ -56,8 +72,8 @@ describe('Canvas', () => {
     ]);
   });
 
-  test('draws nothing for a schema with no tables', () => {
-    load(emptyModel());
+  test('draws nothing for a schema with no tables', async () => {
+    await load(emptyModel());
     const { container } = render(
       <div style={{ width: 800, height: 600 }}>
         <Canvas />
@@ -66,8 +82,8 @@ describe('Canvas', () => {
     expect(nodes(container)).toHaveLength(0);
   });
 
-  test('keeps a removed table on the canvas, and shows an added one', () => {
-    load();
+  test('keeps a removed table on the canvas, and shows an added one', async () => {
+    await load();
     const { container } = render(
       <div style={{ width: 800, height: 600 }}>
         <Canvas />
@@ -80,8 +96,8 @@ describe('Canvas', () => {
     expect(tableNames()).toContain('public.new_table');
   });
 
-  test('shows a renamed table under its new name, once', () => {
-    load();
+  test('shows a renamed table under its new name, once', async () => {
+    await load();
     render(
       <div style={{ width: 800, height: 600 }}>
         <Canvas />
@@ -92,8 +108,8 @@ describe('Canvas', () => {
     expect(tableNames()).not.toContain('public.users');
   });
 
-  test('every node has its own position, so no two tables are drawn on top of each other', () => {
-    load();
+  test('every node has its own position, so no two tables are drawn on top of each other', async () => {
+    await load();
     const { container } = render(
       <div style={{ width: 800, height: 600 }}>
         <Canvas />
@@ -105,8 +121,8 @@ describe('Canvas', () => {
     expect(new Set(places).size).toBe(places.length);
   });
 
-  test('every row has the four ends a foreign key line can have', () => {
-    load();
+  test('every row has the four ends a foreign key line can have', async () => {
+    await load();
     const { container } = render(
       <div style={{ width: 800, height: 600 }}>
         <Canvas />
@@ -120,7 +136,7 @@ describe('Canvas', () => {
 
   test('the layout places the tables, and the canvas says it is done', async () => {
     layout.fail = false;
-    load();
+    await load();
     const { container } = render(
       <div style={{ width: 800, height: 600 }}>
         <Canvas />
@@ -141,7 +157,7 @@ describe('Canvas', () => {
 
   test('if the layout fails the tables stay on the grid, and the canvas says so', async () => {
     layout.fail = true;
-    load();
+    await load();
     const { container } = render(
       <div style={{ width: 800, height: 600 }}>
         <Canvas />
@@ -152,5 +168,52 @@ describe('Canvas', () => {
     );
     expect(nodes(container)).toHaveLength(3);
     layout.fail = false;
+  });
+
+  test('a table is drawn where the layout store says it is, which is where it was dragged', async () => {
+    await load();
+    const { container } = render(
+      <div style={{ width: 800, height: 600 }}>
+        <Canvas />
+      </div>,
+    );
+    act(() => layoutStore.getState().place({ 't:10': { x: 1234, y: 567 } }));
+    const node = container.querySelector('[data-id="t:10"]') as HTMLElement;
+    expect(node.style.transform).toContain('translate(1234px,567px)');
+  });
+
+  test('tables that already have a saved position stay put, and are not laid out again', async () => {
+    saved.positions = {
+      't:10': { x: 10, y: 20 },
+      't:20': { x: 700, y: 20 },
+      't:30': { x: 10, y: 600 },
+    };
+    await load();
+    const { container } = render(
+      <div style={{ width: 800, height: 600 }}>
+        <Canvas />
+      </div>,
+    );
+    await waitFor(() =>
+      expect(container.querySelector('[data-layout="ready"]')).not.toBeNull(),
+    );
+    expect(layoutStore.getState().positions).toEqual(saved.positions);
+    const node = container.querySelector('[data-id="t:20"]') as HTMLElement;
+    expect(node.style.transform).toContain('translate(700px,20px)');
+  });
+
+  test('only the new table is placed by the layout when some tables already have a position', async () => {
+    saved.positions = { 't:10': { x: 10, y: 20 }, 't:20': { x: 700, y: 20 } };
+    await load();
+    render(
+      <div style={{ width: 800, height: 600 }}>
+        <Canvas />
+      </div>,
+    );
+    await waitFor(() =>
+      expect(layoutStore.getState().positions['t:30']).toBeDefined(),
+    );
+    expect(layoutStore.getState().positions['t:10']).toEqual({ x: 10, y: 20 });
+    expect(layoutStore.getState().positions['t:20']).toEqual({ x: 700, y: 20 });
   });
 });
