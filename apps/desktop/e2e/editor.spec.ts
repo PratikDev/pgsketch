@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import type { TestServer } from '../test/postgres';
 import { launchApp } from './app';
 import { connectThroughForm } from './form';
@@ -107,6 +107,91 @@ test("foreign keys are lines with crow's feet, a self-reference is a loop, and t
   );
   expect(boxes['billing.invoices']!.x).toBeLessThan(boxes['public.users']!.x);
   await app.close();
+});
+
+/** The scale React Flow draws the canvas at, from the transform on its viewport. */
+const zoomOf = async (window: Page) =>
+  Number(
+    /scale\(([\d.]+)\)/.exec(
+      (await window.locator('.react-flow__viewport').getAttribute('style')) ??
+        '',
+    )?.[1],
+  );
+
+/** Zooms with the canvas controls until the tables are (or are not) compact; the fit on load can land either side of 70%. */
+async function zoomUntil(window: Page, compact: boolean) {
+  const button = window.getByRole('button', {
+    name: compact ? 'zoom out' : 'zoom in',
+  });
+  while ((await zoomOf(window)) < 0.7 !== compact) {
+    await button.click();
+    await window.waitForTimeout(350);
+  }
+}
+
+test('zooming out below 70% turns tables into compact nodes, and clicking one zooms back to it', async () => {
+  const { app, window } = await launchApp();
+  await connectThroughForm(window, server, E2E_PASSWORD);
+  await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+  await zoomUntil(window, false);
+  await expect(window.locator('.react-flow__node-table')).toHaveCount(3);
+  await expect(window.locator('.react-flow__node-compact')).toHaveCount(0);
+
+  await zoomUntil(window, true);
+  await expect(window.locator('.react-flow__node-compact')).toHaveCount(3);
+  await expect(window.locator('.react-flow__node-table')).toHaveCount(0);
+  const users = window.getByRole('region', { name: 'public.users' });
+  await expect(users).toContainText('5 columns');
+  await expect(users.getByRole('listitem')).toHaveCount(0);
+  // the lines are still drawn, to the compact nodes
+  await expect(window.locator('.react-flow__edge')).toHaveCount(3);
+
+  await users.click();
+  await expect.poll(() => zoomOf(window)).toBeGreaterThanOrEqual(0.7);
+  await expect(window.locator('.react-flow__node-table').first()).toBeVisible();
+  await expect(
+    window.getByRole('region', { name: 'public.users' }).getByRole('listitem'),
+  ).toHaveCount(5);
+  await app.close();
+});
+
+test('a table that was moved is where it was left after the app is restarted', async () => {
+  // where the canvas has the node, which unlike its place on screen does not depend on the zoom
+  const spot = (window: Page) =>
+    window
+      .locator('.react-flow__node', {
+        has: window.getByRole('region', { name: 'billing.invoices' }),
+      })
+      .evaluate((node) => node.style.transform);
+
+  const first = await launchApp();
+  await connectThroughForm(first.window, server, E2E_PASSWORD);
+  await expect(first.window.locator('[data-layout="ready"]')).toHaveCount(1);
+  await zoomUntil(first.window, false);
+  const before = await spot(first.window);
+
+  // drag it by its header
+  const header = first.window
+    .getByRole('region', { name: 'billing.invoices' })
+    .locator('header');
+  const grab = (await header.boundingBox())!;
+  const [x, y] = [grab.x + grab.width / 2, grab.y + grab.height / 2];
+  await first.window.mouse.move(x, y);
+  await first.window.mouse.down();
+  await first.window.mouse.move(x - 60, y + 90, { steps: 8 });
+  await first.window.mouse.up();
+  const moved = await spot(first.window);
+  expect(moved).not.toBe(before);
+
+  // saved a moment after the last move
+  await first.window.waitForTimeout(1_200);
+  await first.app.close();
+
+  const second = await launchApp(first.dataDir);
+  await connectThroughForm(second.window, server, E2E_PASSWORD);
+  await expect(second.window.locator('[data-layout="ready"]')).toHaveCount(1);
+  expect(await spot(second.window)).toBe(moved);
+  await second.app.close();
 });
 
 test('disconnecting from the Editor returns to the Connect screen', async () => {
