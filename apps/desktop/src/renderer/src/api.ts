@@ -25,4 +25,7 @@ export const api = {
     forget: (connectionId: string) =>
       call('connection.forget', { connectionId }),
   },
+  schema: {
+    load: () => call('schema.load'),
+  },
 };
