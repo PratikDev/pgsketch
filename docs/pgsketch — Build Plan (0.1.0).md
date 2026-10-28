@@ -796,8 +796,8 @@ J7 changes four files, and deletes the old `connect-form.ts` and `TextField.tsx`
 | --- | --- | --- | --- | --- |
 | L1 | React Flow canvas fed by the union of baseline and desired | `canvas/Canvas.tsx`, `screens/Editor.tsx` | E2E: every fixture table appears as a node | done |
 | L2 | Static table node and column rows | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | Component test: badges, default chip and FK target render | done |
-| L3 | FK edges with crow's-foot markers, self-reference loops, per-column handles | `canvas/FkEdge.tsx`, `canvas/ColumnRow.tsx` | E2E: edge count equals FK count; a self-reference renders as a loop | todo |
-| L4 | Auto-layout in a worker with per-column ports | `layout/elk.worker.ts`, `layout/autoLayout.ts` | Unit: ELK output maps to node positions; no overlapping nodes | todo |
+| L3 | FK edges with crow's-foot markers, self-reference loops, per-column handles | `canvas/FkEdge.tsx`, `canvas/ColumnRow.tsx` | E2E: edge count equals FK count; a self-reference renders as a loop | done |
+| L4 | Auto-layout in a worker with per-column ports | `layout/elk.worker.ts`, `layout/autoLayout.ts` | Unit: ELK output maps to node positions; no overlapping nodes | done |
 | L5 | Layout repository and channels | `store/layouts.ts`, `main/ipc/layouts.ts`, `main/ipc/connection.ts` | Positions saved and read back per `dbKey`; rows for missing tables are pruned on load; forgetting a connection deletes its layouts | todo |
 | L6 | Renderer layout store with debounced save and restore | `stores/layout.ts` | E2E: moved node keeps its position after restart | todo |
 | L7 | Compact nodes below 70% zoom | `canvas/CompactNode.tsx`, `canvas/Canvas.tsx` | E2E: zooming out switches node type | todo |
