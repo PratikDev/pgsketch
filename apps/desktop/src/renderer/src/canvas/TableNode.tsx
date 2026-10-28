@@ -3,7 +3,9 @@ import { LockIcon } from 'lucide-react';
 import { HEADER_HEIGHT, NODE_WIDTH, PADDING } from '@/layout/autoLayout';
 import { cn } from '@/lib/utils';
 import { ColumnRow } from './ColumnRow';
-import { stateClasses, stateTitle } from './object-state';
+import { InlineText } from '@/editors/InlineText';
+import { schemaStore } from '@/stores/schema';
+import { isEditable, stateClasses, stateTitle } from './object-state';
 import type { TableView } from './model-view';
 
 export type TableNodeType = Node<TableView, 'table'>;
@@ -27,7 +29,13 @@ export function TableNode({ data }: NodeProps<TableNodeType>) {
         className="flex items-center truncate border-b border-border px-3 font-medium"
       >
         <span className="text-muted-foreground">{data.schema}.</span>
-        {data.name}
+        <InlineText
+          id={`${data.id}:name`}
+          label="Table name"
+          value={data.name}
+          disabled={!isEditable(data.state)}
+          onCommit={(name) => schemaStore.getState().renameTable(data.id, name)}
+        />
         {data.state.readOnly && (
           <LockIcon
             aria-label="Read-only"

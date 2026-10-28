@@ -52,6 +52,10 @@ export const READ_ONLY_LABELS: Record<ReadOnlyReason, string> = {
   'nulls-not-distinct-index': 'index with NULLS NOT DISTINCT',
 };
 
+/** Whether the user can edit it: not a read-only object, and not one that is being removed. */
+export const isEditable = ({ status, readOnly }: ObjectState): boolean =>
+  !readOnly && status?.status !== 'removed';
+
 /** How the diff highlighting looks: a coloured left edge and tint for a status, an outline for an error, grey for read-only. */
 export function stateClasses({ status, error, readOnly }: ObjectState): string {
   return cn(
@@ -72,6 +76,9 @@ const oldText = (old: OldValues): string =>
     old.notNull !== undefined && (old.notNull ? 'NOT NULL' : 'nullable'),
     old.default !== undefined && `default ${old.default ?? 'none'}`,
     old.comment !== undefined && 'comment',
+    old.primaryKey !== undefined &&
+      (old.primaryKey ? 'in the primary key' : 'not in the primary key'),
+    old.unique !== undefined && (old.unique ? 'unique' : 'not unique'),
   ]
     .filter(Boolean)
     .join(', ');

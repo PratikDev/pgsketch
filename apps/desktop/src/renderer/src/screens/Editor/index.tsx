@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Canvas } from '@/canvas/Canvas';
+import { ChangeCount } from '@/chrome/ChangeCount';
 import { SchemaFilter } from '@/chrome/SchemaFilter';
 import { layoutStore } from '@/stores/layout';
 import type { SessionInfo } from '../../../../shared/ipc-contract';
@@ -35,6 +36,7 @@ export function Editor({
           </Alert>
         )}
         <div className="ml-auto flex items-center gap-2">
+          {load.status === 'ready' && <ChangeCount />}
           {load.status === 'ready' && <SchemaFilter />}
           <Button variant="outline" onClick={onDisconnect}>
             Disconnect
