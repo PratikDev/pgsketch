@@ -25,6 +25,11 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-added: var(--added);
+  --color-modified: var(--modified);
+  --color-added-tint: var(--added-tint);
+  --color-modified-tint: var(--modified-tint);
+  --color-removed-tint: var(--removed-tint);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -64,6 +69,8 @@
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
+  --added: oklch(0.627 0.194 149.2);
+  --modified: oklch(0.769 0.188 70.1);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
@@ -99,6 +106,8 @@
   --accent: oklch(0.269 0 0);
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
+  --added: oklch(0.696 0.17 149.2);
+  --modified: oklch(0.795 0.184 80);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
@@ -115,6 +124,14 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* a status colour mixed into the card, opaque so a line under a node doesn't show through */
+:root,
+.dark {
+  --added-tint: color-mix(in oklab, var(--added) 14%, var(--card));
+  --modified-tint: color-mix(in oklab, var(--modified) 16%, var(--card));
+  --removed-tint: color-mix(in oklab, var(--destructive) 12%, var(--card));
 }
 
 @layer base {

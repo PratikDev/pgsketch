@@ -5,6 +5,7 @@ import type {
   PgType,
   SchemaModel,
 } from '@pgsketch/core';
+import { stateOf, type ObjectState, type StateSources } from './object-state';
 
 /**
  * Everything the canvas draws: the loaded schema and the edited one together. What the user
@@ -38,6 +39,7 @@ export type ColumnView = {
   default: string | null;
   /** The columns its foreign keys point at, like `users.id`. */
   references: string[];
+  state: ObjectState;
 };
 
 export type TableView = {
@@ -45,6 +47,7 @@ export type TableView = {
   schema: string;
   name: string;
   columns: ColumnView[];
+  state: ObjectState;
 };
 
 /** A type as people write it: no quotes, no schema for `public`. */
@@ -68,8 +71,11 @@ function targetOf(model: SchemaModel, fromSchema: Id, columnId: Id): string {
   return `${prefix}${table.name}.${column.name}`;
 }
 
-/** The tables of a model as the canvas shows them, in schema and table name order. */
-export function tableViews(model: SchemaModel): TableView[] {
+/** The tables of a model as the canvas shows them, in schema and table name order, with the status the diff and the validation give each table and column. */
+export function tableViews(
+  model: SchemaModel,
+  sources?: StateSources,
+): TableView[] {
   const constraints = Object.values(model.constraints);
   const keyColumns = new Set(
     constraints.filter((c) => c.kind === 'pk').flatMap((c) => c.columnIds),
@@ -96,6 +102,7 @@ export function tableViews(model: SchemaModel): TableView[] {
       const target = i < 0 ? undefined : fk.refColumnIds[i];
       return target === undefined ? [] : [targetOf(model, schemaId, target)];
     }),
+    state: stateOf(column.id, column.readOnly, sources),
   });
 
   return Object.values(model.tables)
@@ -103,6 +110,7 @@ export function tableViews(model: SchemaModel): TableView[] {
       id: table.id,
       schema: model.schemas[table.schemaId]?.name ?? '',
       name: table.name,
+      state: stateOf(table.id, table.readOnly, sources),
       columns: Object.values(model.columns)
         .filter((c) => c.tableId === table.id)
         .sort((a, b) => a.position - b.position)

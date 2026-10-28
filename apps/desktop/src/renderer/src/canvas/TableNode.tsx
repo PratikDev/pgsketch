@@ -1,6 +1,9 @@
 import type { Node, NodeProps } from '@xyflow/react';
+import { LockIcon } from 'lucide-react';
 import { HEADER_HEIGHT, NODE_WIDTH, PADDING } from '@/layout/autoLayout';
+import { cn } from '@/lib/utils';
 import { ColumnRow } from './ColumnRow';
+import { stateClasses, stateTitle } from './object-state';
 import type { TableView } from './model-view';
 
 export type TableNodeType = Node<TableView, 'table'>;
@@ -11,7 +14,13 @@ export function TableNode({ data }: NodeProps<TableNodeType>) {
     <section
       aria-label={`${data.schema}.${data.name}`}
       style={{ width: NODE_WIDTH }}
-      className="overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm"
+      title={stateTitle(data.state)}
+      data-status={data.state.status?.status}
+      aria-invalid={data.state.error !== null || undefined}
+      className={cn(
+        'overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-sm',
+        stateClasses(data.state),
+      )}
     >
       <header
         style={{ height: HEADER_HEIGHT }}
@@ -19,6 +28,12 @@ export function TableNode({ data }: NodeProps<TableNodeType>) {
       >
         <span className="text-muted-foreground">{data.schema}.</span>
         {data.name}
+        {data.state.readOnly && (
+          <LockIcon
+            aria-label="Read-only"
+            className="ml-auto size-4 shrink-0"
+          />
+        )}
       </header>
       <ul style={{ padding: PADDING / 2 }}>
         {data.columns.map((column) => (

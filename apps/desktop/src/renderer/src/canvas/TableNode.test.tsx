@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { describe, expect, test } from 'vitest';
 import {
@@ -9,6 +9,7 @@ import {
 } from '@/layout/autoLayout';
 import { fixtureModel } from '@/test-model';
 import { tableViews } from './model-view';
+import type { ObjectState } from './object-state';
 import { TableNode, type TableNodeType } from './TableNode';
 
 const props = (name: string): NodeProps<TableNodeType> => {
@@ -85,5 +86,48 @@ describe('TableNode', () => {
     expect(HEADER_HEIGHT + rows.length * ROW_HEIGHT + padding).toBe(
       nodeHeight(rows.length),
     );
+  });
+
+  describe('status', () => {
+    const withState = (state: Partial<ObjectState>) => {
+      const p = props('invoices');
+      p.data.state = { status: null, error: null, readOnly: null, ...state };
+      render(
+        <ReactFlowProvider>
+          <TableNode {...p} />
+        </ReactFlowProvider>,
+      );
+      return screen.getByRole('region', { name: 'billing.invoices' });
+    };
+
+    test('each status styles the table', () => {
+      const classes = {
+        added: 'border-l-added',
+        modified: 'border-l-modified',
+        removed: 'line-through',
+      } as const;
+      for (const status of ['added', 'modified', 'removed'] as const) {
+        const table = withState({ status: { status, old: {} } });
+        expect(table).toHaveAttribute('data-status', status);
+        expect(table).toHaveClass(classes[status]);
+        cleanup();
+      }
+    });
+
+    test('an error outlines the table and says what is wrong on hover', () => {
+      const table = withState({ error: 'Table "invoices" already exists' });
+      expect(table).toHaveClass('outline-destructive');
+      expect(table).toHaveAttribute('aria-invalid', 'true');
+      expect(table).toHaveAttribute('title', 'Table "invoices" already exists');
+    });
+
+    test('a read-only table is grey with a lock and says why', () => {
+      const table = withState({ readOnly: 'partitioned-table' });
+      expect(table).toHaveClass('bg-muted');
+      expect(
+        within(within(table).getByRole('banner')).getByLabelText('Read-only'),
+      ).toBeInTheDocument();
+      expect(table).toHaveAttribute('title', 'Read-only: partitioned table');
+    });
   });
 });
