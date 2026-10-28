@@ -782,9 +782,9 @@ J7 changes four files, and deletes the old `connect-form.ts` and `TextField.tsx`
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| K1 | Introspector service and `schema.load` channel | `services/introspector.ts`, `main/ipc/schema.ts` | E2E: the editor receives the fixture model, cast data and fingerprint | todo |
-| K2 | Schema store core slice and table actions (add, remove, rename, restore) | `stores/schema/core.ts`, `stores/schema/tables.ts` | A new table starts with an `id bigint` identity PK; rename changes `desired` only; remove then restore leaves an empty diff | todo |
-| K3 | Derived diff, risks, validation and status map | `stores/derived.ts`, `canvas/status.ts` | Renamed column has status `modified` with its old name | todo |
+| K1 | Introspector service and `schema.load` channel | `services/introspector.ts`, `main/ipc/schema.ts` | E2E: the editor receives the fixture model, cast data and fingerprint | done |
+| K2 | Schema store core slice and table actions (add, remove, rename, restore) | `stores/schema/core.ts`, `stores/schema/tables.ts` | A new table starts with an `id bigint` identity PK; rename changes `desired` only; remove then restore leaves an empty diff | done |
+| K3 | Derived diff, risks, validation and status map | `stores/derived.ts`, `canvas/status.ts` | Renamed column has status `modified` with its old name | done |
 | K4 | Column actions with coupling rules: add, remove, rename, flags, type, default, comment | `stores/schema/columns.ts` | Turning PK on sets NN; NN can't be turned off while PK is on; identity rejects a default | todo |
 | K5 | Constraint, index and FK actions, including self-references | `stores/schema/constraints.ts` | A self-referencing FK produces one `addConstraint` | todo |
 | K6 | Schema actions: create schema; change schema of pending tables only | `stores/schema/schemas.ts` | Changing an existing table's schema is rejected by the action | todo |
