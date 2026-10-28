@@ -72,6 +72,65 @@ describe('modified', () => {
   });
 });
 
+describe('the PK and UQ badges', () => {
+  const unique = (id: string, columnIds: string[]) => ({
+    id,
+    tableId: 't:20',
+    kind: 'unique' as const,
+    name: id,
+    columnIds,
+  });
+
+  test('a unique constraint added on one column modifies that column', () => {
+    const map = statuses(
+      (d) => (d.constraints['k:u'] = unique('k:u', ['c:20:2'])),
+    );
+    expect(map['c:20:2']).toEqual({
+      status: 'modified',
+      old: { unique: false },
+    });
+    expect(map['k:u']?.status).toBe('added');
+  });
+
+  test('a unique constraint over several columns is not a UQ badge, so no column changes', () => {
+    const map = statuses(
+      (d) => (d.constraints['k:u'] = unique('k:u', ['c:20:2', 'c:20:3'])),
+    );
+    expect(Object.keys(map)).toEqual(['k:u']);
+  });
+
+  test('a primary key added modifies each column in it, and one dropped remembers it was there', () => {
+    const added = statuses((d) => {
+      d.constraints['k:pk'] = {
+        id: 'k:pk',
+        tableId: 't:20',
+        kind: 'pk',
+        name: 'k:pk',
+        columnIds: ['c:20:1', 'c:20:2'],
+      };
+    });
+    expect(added['c:20:1']?.old).toEqual({ primaryKey: false });
+    expect(added['c:20:2']?.old).toEqual({ primaryKey: false });
+    const dropped = statuses((d) => delete d.constraints['k:1']);
+    expect(dropped['c:10:1']).toEqual({
+      status: 'modified',
+      old: { primaryKey: true },
+    });
+  });
+
+  test('widening a key changes only the column that joined it', () => {
+    const map = statuses((d) => {
+      const key = d.constraints['k:1']!;
+      key.columnIds = ['c:10:1', 'c:10:2'];
+    });
+    expect(map['c:10:1']).toBeUndefined();
+    expect(map['c:10:2']).toEqual({
+      status: 'modified',
+      old: { primaryKey: false },
+    });
+  });
+});
+
 describe('added and removed', () => {
   test('a new table, its columns and its key are added', () => {
     const map = statuses((d) => {

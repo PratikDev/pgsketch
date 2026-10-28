@@ -1,6 +1,7 @@
 import {
   renderPgType,
   type ChangeOp,
+  type Constraint,
   type Id,
   type SchemaModel,
 } from '@pgsketch/core';
@@ -14,6 +15,10 @@ export interface OldValues {
   notNull?: boolean;
   default?: string | null;
   comment?: string | null;
+  /** Was in the primary key. */
+  primaryKey?: boolean;
+  /** Was the only column of a unique constraint. */
+  unique?: boolean;
 }
 
 export interface ObjectStatus {
@@ -34,6 +39,19 @@ export function statusMapOf(ops: ChangeOp[], baseline: SchemaModel): StatusMap {
   const modified = new Map<Id, OldValues>();
   const modify = (id: Id, old: OldValues) =>
     modified.set(id, { ...modified.get(id), ...old });
+  // The PK and UQ badges of a column show these constraints, so adding or dropping one is a change
+  // to the column. A column that stays in a key that was dropped and made again didn't change.
+  const inKey = {
+    primaryKey: [new Set<Id>(), new Set<Id>()],
+    unique: [new Set<Id>(), new Set<Id>()],
+  };
+  const keyChange = (c: Constraint, dropped: boolean) => {
+    const side = dropped ? 0 : 1;
+    if (c.kind === 'pk')
+      c.columnIds.forEach((id) => inKey.primaryKey[side]!.add(id));
+    else if (c.kind === 'unique' && c.columnIds.length === 1)
+      inKey.unique[side]!.add(c.columnIds[0]!);
+  };
   const oldComment = (id: Id) =>
     (baseline.tables[id] ?? baseline.columns[id])?.comment ?? null;
 
@@ -86,9 +104,11 @@ export function statusMapOf(ops: ChangeOp[], baseline: SchemaModel): StatusMap {
         break;
       case 'addConstraint':
         added.add(op.constraint.id);
+        keyChange(op.constraint, false);
         break;
       case 'dropConstraint':
         removed.add(op.constraint.id);
+        keyChange(op.constraint, true);
         break;
       case 'renameConstraint':
         modify(op.constraintId, { name: op.from });
@@ -113,6 +133,13 @@ export function statusMapOf(ops: ChangeOp[], baseline: SchemaModel): StatusMap {
         return unreachable;
       }
     }
+  }
+
+  for (const kind of ['primaryKey', 'unique'] as const) {
+    const [dropped, made] = inKey[kind];
+    for (const id of dropped!) if (!made!.has(id)) modify(id, { [kind]: true });
+    for (const id of made!)
+      if (!dropped!.has(id)) modify(id, { [kind]: false });
   }
 
   const map: StatusMap = {};
