@@ -47,6 +47,68 @@ test('every table of the fixture appears on the canvas as a node, with its colum
   await app.close();
 });
 
+test("foreign keys are lines with crow's feet, a self-reference is a loop, and the layout keeps the tables apart", async () => {
+  const { app, window } = await launchApp();
+  await connectThroughForm(window, server, E2E_PASSWORD);
+  // the layout runs in a worker; if the page's policy stopped it, this would say "failed"
+  await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+
+  // one line for each foreign key: invited_by, user_id, and the composite key of line_items
+  const edges = window.locator('.react-flow__edge');
+  await expect(edges).toHaveCount(3);
+  const path = edges.locator('path.react-flow__edge-path');
+  for (const one of await path.all()) {
+    await expect(one).toHaveAttribute(
+      'marker-start',
+      'url(#pgsketch-crow-foot)',
+    );
+    await expect(one).toHaveAttribute('marker-end', 'url(#pgsketch-one)');
+  }
+
+  // the self-reference leaves the right side of its table and comes back to it: a loop
+  const loop = window.locator(
+    '[data-self-reference="true"] path.react-flow__edge-path',
+  );
+  await expect(loop).toHaveCount(1);
+  await expect(window.locator('[data-self-reference="false"]')).toHaveCount(2);
+  const users = await window
+    .getByRole('region', { name: 'public.users' })
+    .boundingBox();
+  const loopBox = await loop.boundingBox();
+  const right = users!.x + users!.width;
+  expect(loopBox!.x).toBeGreaterThan(right - 12);
+  expect(loopBox!.x + loopBox!.width).toBeGreaterThan(right + 12);
+
+  // no two tables overlap, and a table sits to the left of the one its foreign key points at
+  const boxes = Object.fromEntries(
+    await Promise.all(
+      ['public.users', 'billing.invoices', 'billing.line_items'].map(
+        async (name) =>
+          [
+            name,
+            (await window.getByRole('region', { name }).boundingBox())!,
+          ] as const,
+      ),
+    ),
+  );
+  const names = Object.keys(boxes);
+  for (const a of names)
+    for (const b of names.filter((n) => n > a)) {
+      const [p, q] = [boxes[a]!, boxes[b]!];
+      const apart =
+        p.x + p.width <= q.x ||
+        q.x + q.width <= p.x ||
+        p.y + p.height <= q.y ||
+        q.y + q.height <= p.y;
+      expect(apart, `${a} and ${b}`).toBe(true);
+    }
+  expect(boxes['billing.line_items']!.x).toBeLessThan(
+    boxes['billing.invoices']!.x,
+  );
+  expect(boxes['billing.invoices']!.x).toBeLessThan(boxes['public.users']!.x);
+  await app.close();
+});
+
 test('disconnecting from the Editor returns to the Connect screen', async () => {
   const { app, window } = await launchApp();
   await connectThroughForm(window, server, E2E_PASSWORD);

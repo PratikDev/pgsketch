@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { ReactFlowProvider } from '@xyflow/react';
 import { describe, expect, test } from 'vitest';
 import { ColumnRow } from './ColumnRow';
 import type { ColumnView } from './model-view';
@@ -17,9 +18,11 @@ const column = (over: Partial<ColumnView> = {}): ColumnView => ({
 
 const row = (c: ColumnView) =>
   render(
-    <ul>
-      <ColumnRow column={c} />
-    </ul>,
+    <ReactFlowProvider>
+      <ul>
+        <ColumnRow column={c} />
+      </ul>
+    </ReactFlowProvider>,
   );
 
 describe('ColumnRow', () => {
@@ -29,8 +32,8 @@ describe('ColumnRow', () => {
     expect(screen.getByText('text')).toBeInTheDocument();
     for (const badge of ['PK', 'NN', 'UQ'])
       expect(screen.queryByText(badge)).not.toBeInTheDocument();
-    expect(screen.queryByTitle('Default')).not.toBeInTheDocument();
-    expect(screen.queryByTitle('Foreign key')).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/^Default/)).not.toBeInTheDocument();
+    expect(screen.queryByTitle(/^Foreign key/)).not.toBeInTheDocument();
   });
 
   test('shows a badge for each of primary key, NOT NULL and unique', () => {
@@ -48,18 +51,18 @@ describe('ColumnRow', () => {
 
   test('shows the default as a chip', () => {
     row(column({ default: 'now()' }));
-    expect(screen.getByTitle('Default')).toHaveTextContent('= now()');
+    expect(screen.getByTitle(/^Default/)).toHaveTextContent('= now()');
   });
 
   test('a default that is an empty-looking value is still shown, and no default is not', () => {
     row(column({ default: "''::text" }));
-    expect(screen.getByTitle('Default')).toHaveTextContent("= ''::text");
+    expect(screen.getByTitle(/^Default/)).toHaveTextContent("= ''::text");
   });
 
   test('shows where each foreign key points', () => {
     row(column({ references: ['orgs.id', 'billing.accounts.id'] }));
     expect(
-      screen.getAllByTitle('Foreign key').map((e) => e.textContent),
+      screen.getAllByTitle(/^Foreign key/).map((e) => e.textContent),
     ).toEqual(['→ orgs.id', '→ billing.accounts.id']);
   });
 });

@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { act } from 'react';
-import { afterEach, describe, expect, test } from 'vitest';
+import ELK from 'elkjs/lib/elk.bundled.js';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { fixtureModel } from '@/test-model';
 import { emptyModel } from '@/stores/schema/core';
 import { schemaStore } from '@/stores/schema';
@@ -11,6 +12,25 @@ const load = (model = fixtureModel) =>
   act(() => schemaStore.getState().load({ model, casts, fingerprint: 'f' }));
 
 afterEach(() => load(emptyModel()));
+
+/** The real layout, run in this thread instead of a worker, or made to fail. */
+const elk = new ELK();
+const layout = vi.hoisted(() => ({ fail: false }));
+vi.mock('@/layout/autoLayout', async (original) => {
+  const module = await original<typeof import('@/layout/autoLayout')>();
+  return {
+    ...module,
+    autoLayout: (
+      tables: Parameters<typeof module.autoLayout>[0],
+      links: Parameters<typeof module.autoLayout>[1],
+    ) =>
+      module.autoLayout(tables, links, (graph) =>
+        layout.fail
+          ? Promise.reject(new Error('no worker'))
+          : elk.layout(graph),
+      ),
+  };
+});
 
 const nodes = (container: HTMLElement) =>
   container.querySelectorAll('.react-flow__node');
@@ -83,5 +103,54 @@ describe('Canvas', () => {
       (n) => (n as HTMLElement).style.transform,
     );
     expect(new Set(places).size).toBe(places.length);
+  });
+
+  test('every row has the four ends a foreign key line can have', () => {
+    load();
+    const { container } = render(
+      <div style={{ width: 800, height: 600 }}>
+        <Canvas />
+      </div>,
+    );
+    const rows = 2 + 3 + 0; // users, invoices and events
+    expect(container.querySelectorAll('.react-flow__handle')).toHaveLength(
+      rows * 4,
+    );
+  });
+
+  test('the layout places the tables, and the canvas says it is done', async () => {
+    layout.fail = false;
+    load();
+    const { container } = render(
+      <div style={{ width: 800, height: 600 }}>
+        <Canvas />
+      </div>,
+    );
+    await waitFor(() =>
+      expect(container.querySelector('[data-layout="ready"]')).not.toBeNull(),
+    );
+    // invoices points at users, so it is to the left of it
+    const x = (name: string) => {
+      const node = container.querySelector(
+        `[data-id="${name}"]`,
+      ) as HTMLElement;
+      return Number(/translate\((-?[\d.]+)px/.exec(node.style.transform)?.[1]);
+    };
+    expect(x('t:20')).toBeLessThan(x('t:10'));
+  });
+
+  test('if the layout fails the tables stay on the grid, and the canvas says so', async () => {
+    layout.fail = true;
+    load();
+    const { container } = render(
+      <div style={{ width: 800, height: 600 }}>
+        <Canvas />
+      </div>,
+    );
+    await waitFor(() =>
+      expect(container.querySelector('[data-layout="failed"]')).not.toBeNull(),
+    );
+    expect(nodes(container)).toHaveLength(3);
+    layout.fail = false;
   });
 });
