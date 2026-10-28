@@ -1,0 +1,62 @@
+import type { Id, SchemaModel } from '@pgsketch/core';
+import { useEffect, useState } from 'react';
+import { autoLayout, type LayoutLink, type Point } from '@/layout/autoLayout';
+import type { TableView } from './model-view';
+
+export type LayoutStatus = 'pending' | 'ready' | 'failed';
+
+/** The foreign keys as links between rows, for the layout. */
+function linksOf(model: SchemaModel): LayoutLink[] {
+  return Object.values(model.constraints).flatMap((key): LayoutLink[] => {
+    const from = key.kind === 'fk' ? key.columnIds[0] : undefined;
+    const to = key.kind === 'fk' ? key.refColumnIds[0] : undefined;
+    if (key.kind !== 'fk' || from === undefined || to === undefined) return [];
+    return [
+      {
+        id: key.id,
+        fromTable: key.tableId,
+        fromColumn: from,
+        toTable: key.refTableId,
+        toColumn: to,
+      },
+    ];
+  });
+}
+
+/**
+ * Positions for the tables that have none, from the auto-layout (which runs in a worker): the
+ * whole graph is laid out and only the new tables take their place, so a table that is already
+ * somewhere stays there. Until it answers, and if it can't, tables are left to the caller's
+ * fallback.
+ */
+export function useAutoLayout(
+  model: SchemaModel,
+  views: TableView[],
+): { positions: Record<Id, Point>; status: LayoutStatus } {
+  const [positions, setPositions] = useState<Record<Id, Point>>({});
+  const [failed, setFailed] = useState(false);
+  const missing = views.filter((v) => !positions[v.id]).map((v) => v.id);
+
+  useEffect(() => {
+    if (missing.length === 0 || failed) return;
+    let current = true;
+    autoLayout(
+      views.map((v) => ({ id: v.id, columnIds: v.columns.map((c) => c.id) })),
+      linksOf(model),
+    ).then(
+      (laidOut) => {
+        if (current) setPositions((old) => ({ ...laidOut, ...old }));
+      },
+      () => current && setFailed(true),
+    );
+    return () => {
+      current = false;
+    };
+    // only when a table without a position appears, not on every edit of what is already placed
+  }, [missing.join(), failed]);
+
+  return {
+    positions,
+    status: failed ? 'failed' : missing.length > 0 ? 'pending' : 'ready',
+  };
+}
