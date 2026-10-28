@@ -794,3 +794,23 @@ Positions live in the app database's `layouts(db_key, object_id, x, y)` table, b
 Below 70% zoom (`COMPACT_ZOOM`) a table is drawn by `CompactNode`: the name and the number of columns, at the same width and header height as the full node, with no rows. All of a table's handles are still rendered (hidden), so foreign key lines keep their ends. Clicking a compact node zooms to it with `fitView` (at most 100%), which brings the full node back. `Canvas` is wrapped in a `ReactFlowProvider` so it can read the zoom from the store and call `fitView`. The compact node is shorter than the full one the layout assumed; the gap was accepted rather than laying out again on every zoom change.
 
 **Rationale:** the plan asks for compact nodes at low zoom to keep a large schema readable. The fit on load for the three-table fixture lands at 0.69 in a 900 px window, so the first view can already be compact; the e2e tests zoom with the controls until they are on the side they need.
+
+## Status styling (L8)
+
+**Date & time:** 2026-10-29 10:20
+
+Each table and column of a view carries a `state` (`canvas/object-state.ts`): its diff status (`added`, `modified`, `removed`, from `statusMapOf`), the first validation error on it, and its read-only reason. `tableViews(model, { statuses, errors })` fills it in from the derived diff, which `Canvas` takes from `useDerived()`; without those it is empty, so the views can still be made from a model alone. `stateClasses` gives the look: added is a green left edge and tint, modified amber, removed a red edge and tint with the text struck through and faded, an error a red outline, read-only grey with a lock icon (`LockIcon`, labelled "Read-only"). `stateTitle` gives the hover text: the error message, `Read-only: <reason>` (`READ_ONLY_LABELS` turns each core reason into words), and `Was: type varchar(100)` for what a modified object used to be, from the old values the status map already keeps. The table node and the column row set `data-status` and `aria-invalid` besides, so the tests and the accessibility tree can see them. The status colours are CSS variables in `main.css` (`--added`, `--modified`, and three opaque tints mixed into the card colour, opaque so a foreign key line under a node doesn't show through).
+
+An error is only shown on the table or column it belongs to; errors on constraints and indexes get their place with the footer (M17), and the clickable restore of a removed object comes with the editing phases.
+
+**Rationale:** the plan's diff highlighting table. Putting the state in the view keeps `TableNode` and `ColumnRow` free of store access, so their component tests pass a state in and check the style it gives. The Canvas test edits the real store and checks the rows follow.
+
+## Schema filter and stubs (L9)
+
+**Date & time:** 2026-10-29 10:20
+
+`stores/ui.ts` (the plan's UI store; only the filter is in it so far) keeps `hiddenSchemas`, the ids of the schemas to hide, so a schema that appears later is shown. `chrome/SchemaFilter.tsx` is a shadcn `DropdownMenu` (added with the CLI) with a checkbox item for each schema of the loaded and edited schemas together, which stays open when one is toggled, and "Show all"; its button says how many are shown (`Schemas (1/2)`). Until the top bar (O1) it sits in the Editor's slim bar. `Canvas` leaves out the tables of hidden schemas from the nodes but still lays all of them out, so showing a schema again puts its tables back where they were and never rearranges the rest.
+
+A foreign key from a drawn table to a hidden one ends in a stub: `foreignKeyStubs` (`canvas/edges.ts`) gives a small dashed node (`StubNode`) to the right of the table, level with the key's row and named `→ schema.table`, and a line to it; it can't be dragged or selected, and follows its table. A key the other way round, from a hidden table to a drawn one, has no line and no stub. `foreignKeyEdges` takes the set of drawn tables, and both functions share `endsOf`, which finds the first pair of columns of a key.
+
+**Rationale:** the plan says "FK edges to hidden tables end in a small stub labeled with the target table". Stubs are ordinary React Flow nodes so the existing edge and handle code draws the line to them, instead of a second kind of edge that has no target node. Nothing is drawn for a hidden table's own keys because there is no row to draw them from; the hidden table's schema is one click away in the filter.

@@ -801,8 +801,8 @@ J7 changes four files, and deletes the old `connect-form.ts` and `TextField.tsx`
 | L5 | Layout repository and channels | `store/layouts.ts`, `main/ipc/layouts.ts`, `main/ipc/connection.ts` | Positions saved and read back per `dbKey`; rows for missing tables are pruned on load; forgetting a connection deletes its layouts | done |
 | L6 | Renderer layout store with debounced save and restore | `stores/layout.ts` | E2E: moved node keeps its position after restart | done |
 | L7 | Compact nodes below 70% zoom | `canvas/CompactNode.tsx`, `canvas/Canvas.tsx` | E2E: zooming out switches node type | done |
-| L8 | Status styling: added, modified, removed, error, read-only with reason | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | Component test: each status applies its style | todo |
-| L9 | Schema filter, with stubs for FK edges to hidden tables | `chrome/SchemaFilter.tsx`, `canvas/Canvas.tsx` | E2E: hiding a schema hides its tables and stubs edges into it | todo |
+| L8 | Status styling: added, modified, removed, error, read-only with reason | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | Component test: each status applies its style | done |
+| L9 | Schema filter, with stubs for FK edges to hidden tables | `chrome/SchemaFilter.tsx`, `canvas/Canvas.tsx` | E2E: hiding a schema hides its tables and stubs edges into it | done |
 
 ### M. Canvas editing
 
