@@ -12,7 +12,7 @@ const BLOCKING_KINDS = [
 ];
 
 /** What depends on a column, outside what drops with it: views, policies, triggers, other tables' read-only FKs. */
-function blockersOfColumn(
+export function blockersOfColumn(
   baseline: SchemaModel,
   desired: SchemaModel,
   column: Column,
@@ -38,7 +38,7 @@ function blockersOfColumn(
 }
 
 /** The same for a table. A trigger or policy on the table itself drops with it; one on another table that reads it does not. */
-function blockersOfTable(
+export function blockersOfTable(
   baseline: SchemaModel,
   desired: SchemaModel,
   table: Table,
