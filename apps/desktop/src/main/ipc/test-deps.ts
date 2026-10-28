@@ -5,6 +5,7 @@ import type { ServerConnection } from '../services/connection';
 import { createSecrets, type SafeStorageLike } from '../services/secrets';
 import { openAppDb } from '../store/db';
 import { createConnectionsRepo } from '../store/connections';
+import { createLayoutsRepo } from '../store/layouts';
 import type { IpcDeps } from './deps';
 
 /** A connection that needs no server, which remembers what was asked of it. */
@@ -39,8 +40,10 @@ export function fakeSafeStorage(
 /** Dependencies for the handlers that touch no server: a real in-memory store and a fake keyring. */
 export function testDeps(over: Partial<IpcDeps> = {}) {
   const events: { event: IpcEvent; payload: unknown }[] = [];
+  const db = openAppDb(':memory:');
   const deps: IpcDeps = {
-    connections: createConnectionsRepo(openAppDb(':memory:')),
+    connections: createConnectionsRepo(db),
+    layouts: createLayoutsRepo(db),
     secrets: createSecrets(fakeSafeStorage(), () => true),
     session: createSession(),
     emit: (event, ...payload) => {

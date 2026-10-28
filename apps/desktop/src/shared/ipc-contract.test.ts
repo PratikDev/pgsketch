@@ -110,7 +110,19 @@ const examples: Record<IpcChannel, { valid: unknown[]; invalid: unknown[] }> = {
     ],
   },
   'draft.clear': { valid: [{ dbKey: 'k' }], invalid: [{}] },
-  'layout.get': { valid: [{ dbKey: 'k' }], invalid: [{}] },
+  'layout.get': {
+    valid: [
+      { dbKey: 'k', tableIds: ['t:1', 't:2'] },
+      { dbKey: 'k', tableIds: [] },
+    ],
+    invalid: [
+      {},
+      { dbKey: 'k' },
+      { dbKey: '', tableIds: [] },
+      { dbKey: 'k', tableIds: [''] },
+      { dbKey: 'k', tableIds: 't:1' },
+    ],
+  },
   'layout.put': {
     valid: [
       { dbKey: 'k', positions: { 't:1': { x: 1, y: -2.5 } } },

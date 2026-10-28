@@ -12,6 +12,7 @@ import { createSession } from './session';
 import { openConnection } from './services/connection';
 import { createSecrets } from './services/secrets';
 import { createConnectionsRepo } from './store/connections';
+import { createLayoutsRepo } from './store/layouts';
 import { openAppDb } from './store/db';
 
 // Before anything else: where the app keeps its files, which is also Electron's user data folder,
@@ -86,8 +87,10 @@ if (!app.requestSingleInstanceLock()) {
     });
 
     const log = createLogger({ write: fileSink(paths.logFile) });
+    const db = openAppDb(paths.dbFile);
     registerAllIpc(ipcMain, {
-      connections: createConnectionsRepo(openAppDb(paths.dbFile)),
+      connections: createConnectionsRepo(db),
+      layouts: createLayoutsRepo(db),
       secrets: createSecrets(safeStorage, () => app.isReady()),
       session,
       emit,

@@ -115,7 +115,9 @@ const schemas = {
   'draft.get': z.object({ dbKey: id }),
   'draft.put': z.object({ dbKey: id, draft: draftSchema }),
   'draft.clear': z.object({ dbKey: id }),
-  'layout.get': z.object({ dbKey: id }),
+  /** `tableIds` are the tables that exist now: saved positions for any other table are dropped. */
+  'layout.get': z.object({ dbKey: id, tableIds: z.array(id) }),
+  /** Replaces the saved positions of the database with these. */
   'layout.put': z.object({ dbKey: id, positions: positionsSchema }),
 };
 

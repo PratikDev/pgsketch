@@ -24,7 +24,7 @@ const messageOf = (error: unknown): string =>
     : redact(error instanceof Error ? error.message : String(error));
 
 export function registerConnection(ipc: IpcRegistry, deps: IpcDeps): void {
-  const { connections, secrets, session, emit } = deps;
+  const { connections, layouts, secrets, session, emit } = deps;
 
   /**
    * Connects, makes it the window's open database (closing the one it replaces) and describes it.
@@ -136,5 +136,7 @@ export function registerConnection(ipc: IpcRegistry, deps: IpcDeps): void {
 
   registerIpc(ipc, 'connection.forget', ({ connectionId }) => {
     connections.remove(connectionId);
+    // what was saved about its databases goes with it
+    layouts.removeForConnection(connectionId);
   });
 }
