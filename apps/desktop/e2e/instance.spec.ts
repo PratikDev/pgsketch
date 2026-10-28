@@ -1,6 +1,5 @@
-import { spawn } from 'node:child_process';
 import { expect, test } from '@playwright/test';
-import { launchApp, processEnv } from './app';
+import { launchApp, spawnApp } from './app';
 
 test('two instances with different data folders run side by side', async () => {
   const a = await launchApp();
@@ -22,20 +21,17 @@ test('a second launch with the same data folder hands over to the first and exit
       );
     });
   });
-  const electronPath = await first.app.evaluate(() => process.execPath);
-
   const exitCode = await new Promise<number | null>((resolve, reject) => {
-    const child = spawn(electronPath, ['.'], {
-      env: { ...processEnv(), PGSKETCH_DATA_DIR: first.dataDir },
-      stdio: 'ignore',
-    });
+    const child = spawnApp(first.dataDir);
     const timer = setTimeout(() => {
       child.kill();
       reject(new Error('the second launch did not exit'));
     }, 20_000);
-    child.on('exit', (code) => {
+    child.on('exit', (code, signal) => {
       clearTimeout(timer);
-      resolve(code);
+      if (signal !== null)
+        reject(new Error(`the second launch was killed by ${signal}`));
+      else resolve(code);
     });
   });
 

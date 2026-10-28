@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -40,6 +40,25 @@ const freePort = () =>
     });
   });
 
+const electronPath = join(
+  process.cwd(),
+  'node_modules',
+  'electron',
+  'dist',
+  'electron',
+);
+
+/**
+ * Starts the built app as a plain process, for the tests that can't use Playwright's launcher.
+ * It passes `--no-sandbox` as Playwright does on Linux: CI runners won't let Chromium start its
+ * sandbox, and without the flag the process is killed before it opens a window.
+ */
+export const spawnApp = (dataDir: string, args: string[] = []): ChildProcess =>
+  spawn(electronPath, ['.', '--no-sandbox', ...args], {
+    env: { ...processEnv(), PGSKETCH_DATA_DIR: dataDir },
+    stdio: 'ignore',
+  });
+
 /**
  * Starts the built app on its own and attaches to it over the DevTools protocol. Playwright's own
  * launcher starts Electron with `--password-store=basic`, which leaves the app without a system
@@ -48,16 +67,11 @@ const freePort = () =>
 export async function launchWithKeyring() {
   const dataDir = mkdtempSync(join(tmpdir(), 'pgsketch-e2e-'));
   const port = await freePort();
-  const electronPath = join(
-    process.cwd(),
-    'node_modules',
-    'electron',
-    'dist',
-    'electron',
-  );
-  const child = spawn(electronPath, ['.', `--remote-debugging-port=${port}`], {
-    env: { ...processEnv(), PGSKETCH_DATA_DIR: dataDir },
-    stdio: 'ignore',
+  const child = spawnApp(dataDir, [`--remote-debugging-port=${port}`]);
+  // an app that dies at startup should say so, not leave the test waiting for a port
+  let exited: string | null = null;
+  child.on('exit', (code, signal) => {
+    exited = `The app exited at startup (${signal ?? `code ${code}`})`;
   });
   await expect
     .poll(
@@ -66,11 +80,12 @@ export async function launchWithKeyring() {
           (r) => r.ok,
           () => false,
         ),
-      {
-        timeout: 20_000,
-      },
+      { timeout: 20_000, message: 'the DevTools port to open' },
     )
-    .toBe(true);
+    .toBe(true)
+    .catch((error) => {
+      throw exited === null ? error : new Error(exited, { cause: error });
+    });
   const browser = await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
   const context = browser.contexts()[0];
   if (!context) throw new Error('The app has no browser context');
