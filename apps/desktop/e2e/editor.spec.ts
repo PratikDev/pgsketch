@@ -35,7 +35,9 @@ test('every table of the fixture appears on the canvas as a node, with its colum
 
   const users = window.getByRole('region', { name: 'public.users' });
   await expect(users.getByRole('listitem')).toHaveCount(5);
-  await expect(users.getByText('PK')).toBeVisible();
+  await expect(
+    users.getByRole('button', { name: /^PK/, pressed: true }),
+  ).toHaveCount(1);
   await expect(users.getByText('→ users.id')).toBeVisible(); // invited_by points back at the table
   await expect(users.getByText("= 'active'::public.user_status")).toBeVisible();
 
@@ -129,6 +131,45 @@ async function zoomUntil(window: Page, compact: boolean) {
   }
 }
 
+/** Where the canvas has a table, which unlike its place on screen does not depend on the zoom. */
+const spot = (window: Page, table: string) =>
+  window
+    .locator('.react-flow__node', {
+      has: window.getByRole('region', { name: table }),
+    })
+    .evaluate((node) => node.style.transform);
+
+/** The row of a column in a table, at a zoom where tables are not compact. */
+const rowOf = (window: Page, table: string, column: string) =>
+  window
+    .getByRole('region', { name: table })
+    .getByRole('listitem')
+    .filter({ has: window.getByRole('button', { name: column, exact: true }) });
+
+/**
+ * Brings a table into view at a readable zoom. Zooming in with the controls goes towards the
+ * middle and can push a table off screen, so this fits all the tables in the view first and then
+ * clicks the table's compact node, which zooms to exactly that table.
+ */
+async function showTable(window: Page, table: string) {
+  await window.getByRole('button', { name: 'fit view' }).click();
+  await window.waitForTimeout(400);
+  if ((await zoomOf(window)) < 0.7)
+    await window.getByRole('region', { name: table }).click();
+  await expect.poll(() => zoomOf(window)).toBeGreaterThanOrEqual(0.7);
+  await expect(
+    window.getByRole('region', { name: table }).getByRole('listitem').first(),
+  ).toBeVisible();
+}
+
+async function openEditor(table?: string) {
+  const { app, window } = await launchApp();
+  await connectThroughForm(window, server, E2E_PASSWORD);
+  await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+  if (table) await showTable(window, table);
+  return { app, window };
+}
+
 test('zooming out below 70% turns tables into compact nodes, and clicking one zooms back to it', async () => {
   const { app, window } = await launchApp();
   await connectThroughForm(window, server, E2E_PASSWORD);
@@ -156,19 +197,11 @@ test('zooming out below 70% turns tables into compact nodes, and clicking one zo
 });
 
 test('a table that was moved is where it was left after the app is restarted', async () => {
-  // where the canvas has the node, which unlike its place on screen does not depend on the zoom
-  const spot = (window: Page) =>
-    window
-      .locator('.react-flow__node', {
-        has: window.getByRole('region', { name: 'billing.invoices' }),
-      })
-      .evaluate((node) => node.style.transform);
-
   const first = await launchApp();
   await connectThroughForm(first.window, server, E2E_PASSWORD);
   await expect(first.window.locator('[data-layout="ready"]')).toHaveCount(1);
   await zoomUntil(first.window, false);
-  const before = await spot(first.window);
+  const before = await spot(first.window, 'billing.invoices');
 
   // drag it by its header
   const header = first.window
@@ -180,7 +213,7 @@ test('a table that was moved is where it was left after the app is restarted', a
   await first.window.mouse.down();
   await first.window.mouse.move(x - 60, y + 90, { steps: 8 });
   await first.window.mouse.up();
-  const moved = await spot(first.window);
+  const moved = await spot(first.window, 'billing.invoices');
   expect(moved).not.toBe(before);
 
   // saved a moment after the last move
@@ -190,7 +223,7 @@ test('a table that was moved is where it was left after the app is restarted', a
   const second = await launchApp(first.dataDir);
   await connectThroughForm(second.window, server, E2E_PASSWORD);
   await expect(second.window.locator('[data-layout="ready"]')).toHaveCount(1);
-  expect(await spot(second.window)).toBe(moved);
+  expect(await spot(second.window, 'billing.invoices')).toBe(moved);
   await second.app.close();
 });
 
@@ -227,6 +260,135 @@ test('hiding a schema hides its tables, and a foreign key into it ends in a stub
   await expect(
     window.getByRole('region', { name: 'public.users' }),
   ).toBeVisible();
+  await app.close();
+});
+
+test('renaming a column: it turns amber and the change count goes up', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  await expect(window.getByText('0 changes')).toBeVisible();
+  await rowOf(window, 'billing.line_items', 'label')
+    .getByRole('button', { name: 'label', exact: true })
+    .click();
+  await window.keyboard.type('title');
+  await window.keyboard.press('Enter');
+
+  const row = rowOf(window, 'billing.line_items', 'title');
+  await expect(row).toHaveAttribute('data-status', 'modified');
+  await expect(row).toHaveAttribute('title', 'Was: name label');
+  await expect(window.getByText('1 change', { exact: true })).toBeVisible();
+  await app.close();
+});
+
+test('Esc cancels a rename, and nothing is changed', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  await rowOf(window, 'billing.line_items', 'label')
+    .getByRole('button', { name: 'label', exact: true })
+    .click();
+  await window.keyboard.type('title');
+  await window.keyboard.press('Escape');
+  await expect(
+    rowOf(window, 'billing.line_items', 'label'),
+  ).not.toHaveAttribute('data-status');
+  await expect(window.getByText('0 changes')).toBeVisible();
+  await app.close();
+});
+
+test('selecting text in the input does not move the node, and Backspace does not delete it', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  const table = 'billing.line_items';
+  const before = await spot(window, table);
+  await rowOf(window, table, 'label')
+    .getByRole('button', { name: 'label', exact: true })
+    .click();
+  const input = window.getByRole('textbox', { name: 'Column name' });
+  const box = (await input.boundingBox())!;
+  // drag across the text, as a person selecting it would
+  await window.mouse.move(box.x + box.width - 4, box.y + box.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(box.x + 4, box.y + box.height / 2 + 30, { steps: 6 });
+  await window.mouse.up();
+  expect(await spot(window, table)).toBe(before);
+
+  // Backspace edits the text, and the table stays
+  await window.keyboard.press('Backspace');
+  await expect(input).toHaveValue('');
+  await expect(window.locator('.react-flow__node')).toHaveCount(3);
+  await window.keyboard.press('Escape');
+
+  // and with the table itself selected, neither key removes it
+  await window.getByRole('region', { name: table }).locator('header').click();
+  await window.keyboard.press('Backspace');
+  await window.keyboard.press('Delete');
+  await expect(window.locator('.react-flow__node')).toHaveCount(3);
+  await app.close();
+});
+
+test('the table name is renamed the same way', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  await window
+    .getByRole('region', { name: 'billing.line_items' })
+    .getByRole('button', { name: 'line_items', exact: true })
+    .click();
+  await window.keyboard.type('order_lines');
+  await window.keyboard.press('Enter');
+  await expect(
+    window.getByRole('region', { name: 'billing.order_lines' }),
+  ).toHaveAttribute('data-status', 'modified');
+  await expect(window.getByText('1 change', { exact: true })).toBeVisible();
+  await app.close();
+});
+
+test('NN, PK and UQ switch on click; PK turns NN on and locks it, and identity locks it too', async () => {
+  const { app, window } = await openEditor();
+  const nn = (row: ReturnType<typeof rowOf>) =>
+    row.getByRole('button', { name: /^NN/ });
+  const pk = (row: ReturnType<typeof rowOf>) =>
+    row.getByRole('button', { name: /^PK/ });
+
+  // NN on a nullable column
+  await showTable(window, 'public.users');
+  const invitedBy = rowOf(window, 'public.users', 'invited_by');
+  await expect(nn(invitedBy)).toHaveAttribute('aria-pressed', 'false');
+  await nn(invitedBy).click();
+  await expect(nn(invitedBy)).toHaveAttribute('aria-pressed', 'true');
+  await expect(invitedBy).toHaveAttribute('data-status', 'modified');
+  await expect(invitedBy).toHaveAttribute('title', 'Was: nullable');
+  await nn(invitedBy).click();
+  await expect(invitedBy).not.toHaveAttribute('data-status');
+
+  // an identity column is NOT NULL for good
+  await expect(nn(rowOf(window, 'public.users', 'id'))).toBeDisabled();
+
+  // PK on a nullable column
+  await showTable(window, 'billing.line_items');
+  const label = rowOf(window, 'billing.line_items', 'label');
+  await expect(nn(label)).toBeEnabled();
+  await pk(label).click();
+  await expect(pk(label)).toHaveAttribute('aria-pressed', 'true');
+  await expect(nn(label)).toHaveAttribute('aria-pressed', 'true');
+  await expect(nn(label)).toBeDisabled();
+  await pk(label).click();
+  await expect(nn(label)).toHaveAttribute('aria-pressed', 'true');
+  await expect(nn(label)).toBeEnabled();
+
+  // UQ
+  const issued = rowOf(window, 'billing.line_items', 'issued');
+  const uq = issued.getByRole('button', { name: /^UQ/ });
+  await uq.click();
+  await expect(uq).toHaveAttribute('aria-pressed', 'true');
+  await expect(issued).toHaveAttribute('data-status', 'modified');
+  await expect(issued).toHaveAttribute('title', 'Was: not unique');
+  await uq.click();
+  await expect(issued).not.toHaveAttribute('data-status');
+
+  // the three switches and the chips never squeeze a name out of its row
+  const names = window
+    .getByRole('region', { name: 'billing.line_items' })
+    .locator('li > button, li > span:first-child');
+  for (const name of await names.all())
+    expect(await name.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(
+      true,
+    );
   await app.close();
 });
 
