@@ -770,3 +770,27 @@ Every row has four handles (left and right, each as a start and an end of a line
 Tables are now drawn at exactly the size the layout assumes: 300 px wide, a 40 px header, rows of 28 px and 4 px padding, with long names, types and chips cut short (the chips show the full text as a tooltip). Before that the layout assumed 300 px while a long default chip made a node much wider, and the e2e overlap check found two tables on top of each other. The constants are exported from `autoLayout.ts` and used by the node, so they can't drift apart; a component test adds them up.
 
 **Rationale:** the plan has ELK in a worker with one port per column. Using fixed sizes avoids drawing nodes, measuring them and laying out again. The e2e checks that the layout is ready (so the worker works under the page's content security policy), that no two tables overlap, that a table sits left of the one its key points at, and that there is one line per key, each with the markers, one of them a loop reaching beyond its table's right edge.
+
+## Saved layouts: repository and channels (L5)
+
+**Date & time:** 2026-10-28 22:50
+
+Positions live in the app database's `layouts(db_key, object_id, x, y)` table, behind `createLayoutsRepo` (`main/store/layouts.ts`): `get`, `put` (replaces every position of a database in one transaction, rolled back on error), `prune` and `removeForConnection`. Two channels: `layout.get` takes `{ dbKey, tableIds }`, deletes the rows of any table not in `tableIds` and returns what is left; `layout.put` takes `{ dbKey, positions }` and replaces. `connection.forget` now also deletes the layouts of that connection (every `dbKey` that starts with `<id>:`, with `%`, `_` and `\` in the id escaped for `LIKE`).
+
+**Rationale:** the plan has pruning happen on load. Doing it inside `layout.get` (the renderer says which tables exist) keeps the renderer from needing a separate cleanup call and means a table dropped in the database never leaves a row behind. Replace-on-put keeps the repository free of per-table updates.
+
+## Layout store with debounced save (L6)
+
+**Date & time:** 2026-10-28 22:50
+
+`stores/layout.ts` (`createLayoutStore`, with `layoutStore` for the app) holds `positions` for the open database and whether they have `loaded`. `restore(dbKey, tableIds)` runs once the schema is loaded (in `useLoadSchema`); a failed read is treated as no saved layout, so the Canvas lays everything out afresh. `move` (dragging) and `place` (auto-layout) change positions and save 500 ms after the last change; `flush` saves at once and runs when the Editor closes and before another database is restored. A failed save is tried again with the next change or flush. Auto-layout now waits until the positions are loaded and only places tables that have none, so a saved layout is never rearranged; the canvas root stays `pending` until then. Nodes are draggable. A table that has a position but is still pending (new) is saved too and removed by the prune on the next load, since its id changes when it is created.
+
+**Rationale:** the debounce keeps a drag from writing on every mouse move; flushing on unmount avoids losing the last move when the user disconnects within the delay. The e2e test moves a table, waits for the save, restarts the app on the same data folder and checks the node is in the same place in canvas coordinates (its place on screen depends on the zoom the view is fitted to).
+
+## Compact nodes (L7)
+
+**Date & time:** 2026-10-28 22:50
+
+Below 70% zoom (`COMPACT_ZOOM`) a table is drawn by `CompactNode`: the name and the number of columns, at the same width and header height as the full node, with no rows. All of a table's handles are still rendered (hidden), so foreign key lines keep their ends. Clicking a compact node zooms to it with `fitView` (at most 100%), which brings the full node back. `Canvas` is wrapped in a `ReactFlowProvider` so it can read the zoom from the store and call `fitView`. The compact node is shorter than the full one the layout assumed; the gap was accepted rather than laying out again on every zoom change.
+
+**Rationale:** the plan asks for compact nodes at low zoom to keep a large schema readable. The fit on load for the three-table fixture lands at 0.69 in a 900 px window, so the first view can already be compact; the e2e tests zoom with the controls until they are on the side they need.
