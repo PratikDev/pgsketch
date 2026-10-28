@@ -1,6 +1,7 @@
 import { blockersOfTable, type Id, type SchemaModel } from '@pgsketch/core';
 import type { StateCreator } from 'zustand';
 import type { SchemaStore } from '.';
+import { firstFree } from './helpers';
 
 export interface TablesSlice {
   /** A new table in a schema, with an `id bigint` identity primary key. Returns its id. */
@@ -13,19 +14,6 @@ export interface TablesSlice {
   removeTable: (tableId: Id) => string | null;
   /** Puts a removed table back as it was loaded, with what went with it. */
   restoreTable: (tableId: Id) => void;
-}
-
-/** The first of `new_table`, `new_table_2`, … that no table in the schema has. */
-function freeName(model: SchemaModel, schemaId: Id): string {
-  const taken = new Set(
-    Object.values(model.tables)
-      .filter((t) => t.schemaId === schemaId)
-      .map((t) => t.name),
-  );
-  for (let n = 1; ; n++) {
-    const name = n === 1 ? 'new_table' : `new_table_${n}`;
-    if (!taken.has(name)) return name;
-  }
 }
 
 function removeFrom(model: SchemaModel, tableId: Id): void {
@@ -55,7 +43,12 @@ export const createTablesSlice: StateCreator<
       d.tables[tableId] = {
         id: tableId,
         schemaId,
-        name: freeName(d, schemaId),
+        name: firstFree(
+          'new_table',
+          Object.values(d.tables)
+            .filter((t) => t.schemaId === schemaId)
+            .map((t) => t.name),
+        ),
         comment: null,
       };
       d.columns[columnId] = {
