@@ -33,6 +33,7 @@ export type ColumnView = {
   type: string;
   primaryKey: boolean;
   notNull: boolean;
+  identity: boolean;
   /** The only column of a unique constraint. */
   unique: boolean;
   /** The default as SQL, without `=`. */
@@ -95,6 +96,7 @@ export function tableViews(
     type: typeLabel(column.type),
     primaryKey: keyColumns.has(column.id),
     notNull: column.notNull,
+    identity: column.identity !== null,
     unique: uniqueColumns.has(column.id),
     default: column.default?.expression ?? null,
     references: foreignKeys.flatMap((fk) => {

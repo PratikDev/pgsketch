@@ -122,6 +122,8 @@ function CanvasContent() {
         edgeTypes={edgeTypes}
         nodesConnectable={false}
         nodesDraggable
+        // a table is deleted from its toolbar; the key must never do it, least of all while typing
+        deleteKeyCode={null}
         onNodesChange={onNodesChange}
         onNodeClick={onNodeClick}
         fitView

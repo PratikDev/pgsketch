@@ -11,6 +11,7 @@ const column = (over: Partial<ColumnView> = {}): ColumnView => ({
   type: 'text',
   primaryKey: false,
   notNull: false,
+  identity: false,
   unique: false,
   default: null,
   references: [],
@@ -33,22 +34,22 @@ describe('ColumnRow', () => {
     expect(screen.getByText('email')).toBeInTheDocument();
     expect(screen.getByText('text')).toBeInTheDocument();
     for (const badge of ['PK', 'NN', 'UQ'])
-      expect(screen.queryByText(badge)).not.toBeInTheDocument();
+      expect(screen.getByText(badge)).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByTitle(/^Default/)).not.toBeInTheDocument();
     expect(screen.queryByTitle(/^Foreign key/)).not.toBeInTheDocument();
   });
 
-  test('shows a badge for each of primary key, NOT NULL and unique', () => {
+  test('shows each of primary key, NOT NULL and unique as on when it applies', () => {
     row(column({ primaryKey: true, notNull: true, unique: true }));
     for (const badge of ['PK', 'NN', 'UQ'])
-      expect(screen.getByText(badge)).toBeInTheDocument();
+      expect(screen.getByText(badge)).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('shows only the badges that apply', () => {
+  test('shows only the badges that apply as on', () => {
     row(column({ notNull: true }));
-    expect(screen.getByText('NN')).toBeInTheDocument();
-    expect(screen.queryByText('PK')).not.toBeInTheDocument();
-    expect(screen.queryByText('UQ')).not.toBeInTheDocument();
+    expect(screen.getByText('NN')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('PK')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('UQ')).toHaveAttribute('aria-pressed', 'false');
   });
 
   test('shows the default as a chip', () => {

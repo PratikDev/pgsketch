@@ -62,7 +62,9 @@ describe('TableNode', () => {
         <TableNode {...props('users')} />
       </ReactFlowProvider>,
     );
-    expect(screen.getByText('PK')).toBeInTheDocument();
+    expect(
+      screen.getAllByText('PK').filter((b) => b.ariaPressed === 'true'),
+    ).toHaveLength(1);
     expect(screen.getByTitle(/^Default/)).toHaveTextContent(
       "= 'active'::user_status",
     );
