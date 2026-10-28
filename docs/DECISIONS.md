@@ -814,3 +814,45 @@ An error is only shown on the table or column it belongs to; errors on constrain
 A foreign key from a drawn table to a hidden one ends in a stub: `foreignKeyStubs` (`canvas/edges.ts`) gives a small dashed node (`StubNode`) to the right of the table, level with the key's row and named `→ schema.table`, and a line to it; it can't be dragged or selected, and follows its table. A key the other way round, from a hidden table to a drawn one, has no line and no stub. `foreignKeyEdges` takes the set of drawn tables, and both functions share `endsOf`, which finds the first pair of columns of a key.
 
 **Rationale:** the plan says "FK edges to hidden tables end in a small stub labeled with the target table". Stubs are ordinary React Flow nodes so the existing edge and handle code draws the line to them, instead of a second kind of edge that has no target node. Nothing is drawn for a hidden table's own keys because there is no row to draw them from; the hidden table's schema is one click away in the filter.
+
+## Inline name editing (M1)
+
+**Date & time:** 2026-10-29 12:05
+
+`editors/InlineText.tsx` shows a name as a text button; clicking it turns it into a shadcn `Input` with all the text selected. Enter, Tab or the input losing focus commits, Esc cancels. Text that is empty (after trimming) or unchanged commits nothing, so it never makes a change. A commit calls `renameTable` or `renameColumn` on the schema store; the name is not checked here, since a name that is taken or empty is a validation error shown by L8. The table name in the header and the column name in a row use it. A read-only object and one that is being removed show a plain name with nothing to click (`isEditable` in `object-state.ts`); compact nodes have none, since clicking one zooms to it.
+
+The plan says "Click → inline input" in the interaction table and "double-click the name" in the node section: the table wins, so it is a single click for tables and columns alike. The UI store now holds `editing`, the key of the one input that's open (`<id>:name`), as the plan's UI store lists "the cell being edited"; opening a second input commits the first, as its input loses focus, and `stopEditing(key)` does nothing if another has opened since. The change handler (phase P) can wait on it.
+
+Leaving the input commits instead of discarding because the plan says typed text is never lost. Tab commits on its own key as well as on the blur that follows, so a `finished` flag keeps it from committing twice.
+
+The e2e test needs the change count: until the top bar (O1) there is a small `ChangeCount` (`chrome/ChangeCount.tsx`) in the Editor's bar saying "N changes", from the number of operations in the derived diff. O1 replaces it with its own counters.
+
+**Rationale:** the plan's M1 test, "rename a column; it turns amber and the change count updates". The e2e test brings a table into view by clicking its compact node (`showTable`), since zooming in with the controls can push a table off screen where Playwright can't reach it.
+
+## Input safety (M2)
+
+**Date & time:** 2026-10-29 12:05
+
+The input carries `nodrag nopan` (React Flow's classes), so selecting its text with the mouse doesn't move the table or pan the canvas, and the name button and the PK/NN/UQ buttons carry `nodrag` so dragging from them moves the table instead of starting nothing. React Flow already ignores key presses that come from an input; on top of that `Canvas` sets `deleteKeyCode={null}`, so Backspace and Delete never delete a node, whether or not an input has focus. The canvas ignores node removal changes anyway; a table is deleted from its toolbar (a later phase).
+
+**Rationale:** the plan's rule, "Delete/Backspace never remove nodes while an input has focus". Turning the key off outright is safer than relying on focus checks and costs nothing, since the key was never meant to do anything. The e2e test selects text by dragging, checks the table hasn't moved, presses Backspace in the input (it edits the text) and with the table selected (it stays).
+
+## PK, NN and UQ switches (M3)
+
+**Date & time:** 2026-10-29 12:05
+
+`KeyBadges` renders the three badges on every column as buttons with `aria-pressed`, faded when off. PK calls `setPrimaryKey` (which turns NOT NULL on and leaves it on when PK is turned off), NN `setNotNull`, UQ `setUnique`. NN is disabled while the column is in the primary key or is an identity column, with the reason as its hover text; all three are disabled on a read-only column and on one being removed. `ColumnView` now has `identity`. The badges used to appear only when on; they now always show, so a row has less room for a long name or default (both are cut short as before).
+
+**Rationale:** the plan's M3. Locking NN instead of showing the store's refusal message means the message can't happen from the UI. The component test runs the real store: PK on a nullable column turns NN on and locks it; PK off leaves NN on and unlocks it. The e2e test does the same on the fixture and checks an identity column's NN is disabled.
+
+## Fixes found while trying M1–M3 by hand
+
+**Date & time:** 2026-10-29 13:10
+
+Three things showed up when the app was tried by hand.
+
+**Column names were squeezed out of their row.** With PK, NN and UQ always shown (M3) plus the type and the chips, the name and type were cut to a letter or nothing. `ColumnRow` now gives the name `max-w-28 shrink-0`, lets the type and the default and foreign key chips shrink (the chips first, `shrink-3`, and cut with an ellipsis; the full text is in their hover), and the lock and the switches never shrink; the switches are a little narrower (`px-1.5`). The e2e test checks no name is cut. The row is still 300 px wide, so a long default or target is cut short.
+
+**Turning UQ (or PK) on or off didn't change how the row looked.** The diff gave the new constraint a status, not the column, and a column's PK and UQ badges are drawn from those constraints. `statusMapOf` now marks a column modified, with `old: { unique: false }` or `{ primaryKey: true }` and so on, when a primary key it is in, or a unique constraint on just that column, is added or dropped (`Was: not unique`). A column that is in a key that is dropped and made again with it still in (widening a key) isn't marked. A unique constraint on several columns isn't a UQ badge, so it marks nothing.
+
+**The e2e suite was flaky under load**, failing now and then on the layout or the nodes not being ready within 5 s while two apps and the container ran together. Playwright's `expect` timeout is now 10 s (`playwright.config.ts`); the test timeout is as before.

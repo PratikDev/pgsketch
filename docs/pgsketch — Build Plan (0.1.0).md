@@ -808,9 +808,9 @@ J7 changes four files, and deletes the old `connect-form.ts` and `TextField.tsx`
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| M1 | Inline text editing for table and column names | `editors/InlineText.tsx`, `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: rename a column; it turns amber and the change count updates | todo |
-| M2 | Input safety: `nodrag nopan`, Delete/Backspace guarded | `editors/InlineText.tsx`, `canvas/Canvas.tsx` | E2E: selecting text doesn't move the node; Backspace doesn't delete it | todo |
-| M3 | Badge toggles for PK, NN, UQ, with NN locked for PK and identity columns | `canvas/ColumnRow.tsx` | E2E: toggling NN produces `setNotNull`; toggling PK turns NN on and locks it | todo |
+| M1 | Inline text editing for table and column names | `editors/InlineText.tsx`, `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: rename a column; it turns amber and the change count updates | done |
+| M2 | Input safety: `nodrag nopan`, Delete/Backspace guarded | `editors/InlineText.tsx`, `canvas/Canvas.tsx` | E2E: selecting text doesn't move the node; Backspace doesn't delete it | done |
+| M3 | Badge toggles for PK, NN, UQ, with NN locked for PK and identity columns | `canvas/ColumnRow.tsx` | E2E: toggling NN produces `setNotNull`; toggling PK turns NN on and locks it | done |
 | M4 | Type picker popover with built-in types, existing enums, parameters, array toggle | `editors/TypePicker.tsx`, `canvas/ColumnRow.tsx` | Component test: choosing `varchar` shows a length input; an existing enum is listed | todo |
 | M5 | Add and delete columns; Tab/Enter keyboard flow | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: create three columns using only the keyboard | todo |
 | M6 | New table on double-click in the filtered schema; table toolbar | `canvas/Canvas.tsx`, `canvas/TableToolbar.tsx` | E2E: a new table appears at the cursor with its name focused | todo |
