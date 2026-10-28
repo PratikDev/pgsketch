@@ -3,6 +3,7 @@ import type {
   IpcArgs,
   IpcChannel,
   IpcResults,
+  Positions,
 } from '../../shared/ipc-contract';
 
 /** Reads `window.api` when called, so a test can put its own in place. */
@@ -27,5 +28,11 @@ export const api = {
   },
   schema: {
     load: () => call('schema.load'),
+  },
+  layout: {
+    get: (dbKey: string, tableIds: string[]) =>
+      call('layout.get', { dbKey, tableIds }),
+    put: (dbKey: string, positions: Positions) =>
+      call('layout.put', { dbKey, positions }),
   },
 };
