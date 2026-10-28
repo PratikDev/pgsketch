@@ -194,6 +194,42 @@ test('a table that was moved is where it was left after the app is restarted', a
   await second.app.close();
 });
 
+test('hiding a schema hides its tables, and a foreign key into it ends in a stub', async () => {
+  const { app, window } = await launchApp();
+  await connectThroughForm(window, server, E2E_PASSWORD);
+  await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+  await expect(window.locator('.react-flow__node')).toHaveCount(3);
+
+  await window.getByRole('button', { name: /^Schemas/ }).click();
+  await window.getByRole('menuitemcheckbox', { name: 'public' }).click();
+  await window.keyboard.press('Escape');
+
+  // users is gone; invoices stays, and its key to users is a stub
+  await expect(
+    window.getByRole('region', { name: 'public.users' }),
+  ).toHaveCount(0);
+  await expect(
+    window.getByRole('region', { name: 'billing.invoices' }),
+  ).toBeVisible();
+  await expect(
+    window.getByRole('region', { name: 'billing.line_items' }),
+  ).toBeVisible();
+  const stub = window.locator('.react-flow__node-stub');
+  await expect(stub).toHaveCount(1);
+  await expect(stub).toHaveText('→ public.users');
+  // the line from line_items to invoices, and the one from invoices to the stub
+  await expect(window.locator('.react-flow__edge')).toHaveCount(2);
+
+  await window.getByRole('button', { name: /^Schemas/ }).click();
+  await window.getByRole('menuitem', { name: 'Show all' }).click();
+  await window.keyboard.press('Escape');
+  await expect(window.locator('.react-flow__node-stub')).toHaveCount(0);
+  await expect(
+    window.getByRole('region', { name: 'public.users' }),
+  ).toBeVisible();
+  await app.close();
+});
+
 test('disconnecting from the Editor returns to the Connect screen', async () => {
   const { app, window } = await launchApp();
   await connectThroughForm(window, server, E2E_PASSWORD);
