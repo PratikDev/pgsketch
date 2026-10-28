@@ -1,7 +1,13 @@
 import type { SchemaModel } from '@pgsketch/core';
 import { describe, expect, test } from 'vitest';
 import { fixtureModel } from '@/test-model';
-import { foreignKeyEdges, handleId, loopPath } from './edges';
+import {
+  foreignKeyEdges,
+  foreignKeyStubs,
+  handleId,
+  loopPath,
+  STUB_HANDLE,
+} from './edges';
 
 const withKeys = (change: (m: SchemaModel) => void): SchemaModel => {
   const model = structuredClone(fixtureModel);
@@ -113,6 +119,58 @@ describe('foreignKeyEdges', () => {
       ),
     );
     expect(new Set(ids).size).toBe(4);
+  });
+});
+
+describe('foreignKeyEdges with some tables hidden', () => {
+  test('has no line for a key with a hidden table at either end', () => {
+    expect(foreignKeyEdges(fixtureModel, {}, new Set(['t:20']))).toEqual([]);
+    expect(foreignKeyEdges(fixtureModel, {}, new Set(['t:10']))).toEqual([]);
+    expect(
+      foreignKeyEdges(fixtureModel, {}, new Set(['t:10', 't:20'])),
+    ).toHaveLength(1);
+  });
+});
+
+describe('foreignKeyStubs', () => {
+  const placed = { 't:20': { x: 100, y: 200 }, 't:10': { x: 0, y: 0 } };
+
+  test('is a node named for the hidden table and a line to it, beside the key row', () => {
+    const { nodes, edges } = foreignKeyStubs(
+      fixtureModel,
+      placed,
+      new Set(['t:20']),
+    );
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0]).toMatchObject({
+      id: 'stub:k:2',
+      type: 'stub',
+      data: { label: 'public.users' },
+      draggable: false,
+    });
+    // to the right of the table, and level with the second row
+    expect(nodes[0]!.position.x).toBeGreaterThan(100 + 300);
+    expect(nodes[0]!.position.y).toBeGreaterThan(200 + 40 + 28);
+    expect(edges).toEqual([
+      expect.objectContaining({
+        source: 't:20',
+        target: 'stub:k:2',
+        sourceHandle: handleId('c:20:2', 'right', 'source'),
+        targetHandle: STUB_HANDLE,
+      }),
+    ]);
+  });
+
+  test('is none when both tables are drawn, or the table with the key is hidden', () => {
+    for (const visible of [
+      new Set(['t:10', 't:20']),
+      new Set(['t:10']),
+      new Set<string>(),
+    ])
+      expect(foreignKeyStubs(fixtureModel, placed, visible)).toEqual({
+        nodes: [],
+        edges: [],
+      });
   });
 });
 

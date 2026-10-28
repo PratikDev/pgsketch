@@ -11,20 +11,23 @@ import {
 import '@xyflow/react/dist/style.css';
 import { useCallback, useEffect, useMemo } from 'react';
 import { layoutStore, useLayoutStore } from '@/stores/layout';
+import { useDerived } from '@/stores/derived';
 import { useSchemaStore } from '@/stores/schema';
+import { useUiStore } from '@/stores/ui';
 import {
   CompactNode,
   isCompactZoom,
   type CompactNodeType,
 } from './CompactNode';
-import { foreignKeyEdges } from './edges';
+import { foreignKeyEdges, foreignKeyStubs, type StubNodeType } from './edges';
 import { FkEdge, FkMarkers } from './FkEdge';
 import { tableViews, unionOf } from './model-view';
+import { StubNode } from './StubNode';
 import { TableNode, type TableNodeType } from './TableNode';
 import { useAutoLayout } from './use-auto-layout';
 
 // outside the component: React Flow wants the same object on every render
-const nodeTypes = { table: TableNode, compact: CompactNode };
+const nodeTypes = { table: TableNode, compact: CompactNode, stub: StubNode };
 const edgeTypes = { fk: FkEdge };
 
 /** Where a table goes until the layout has placed it: a grid, in the order the tables are listed. */
@@ -58,19 +61,44 @@ function CanvasContent() {
   const baseline = useSchemaStore((s) => s.baseline);
   const desired = useSchemaStore((s) => s.desired);
   const model = useMemo(() => unionOf(baseline, desired), [baseline, desired]);
-  const views = useMemo(() => tableViews(model), [model]);
+  const { statuses, errors } = useDerived();
+  const views = useMemo(
+    () => tableViews(model, { statuses, errors }),
+    [model, statuses, errors],
+  );
   const status = useAutoLayout(model, views);
   const positions = useLayoutStore((s) => s.positions);
-  const nodes = useMemo<(TableNodeType | CompactNodeType)[]>(
+  const hiddenSchemas = useUiStore((s) => s.hiddenSchemas);
+  // tables of a hidden schema stay laid out and positioned, they are just not drawn
+  const tableNodes = useMemo<(TableNodeType | CompactNodeType)[]>(
     () =>
-      views.map((view, i) => ({
-        id: view.id,
-        type: compact ? 'compact' : 'table',
-        position: positions[view.id] ?? gridPosition(i),
-        data: view,
-      })),
-    [views, positions, compact],
+      views.flatMap((view, i) =>
+        hiddenSchemas.includes(model.tables[view.id]?.schemaId ?? '')
+          ? []
+          : [
+              {
+                id: view.id,
+                type: compact ? ('compact' as const) : ('table' as const),
+                position: positions[view.id] ?? gridPosition(i),
+                data: view,
+              },
+            ],
+      ),
+    [views, model, hiddenSchemas, positions, compact],
   );
+  const { nodes, edges } = useMemo(() => {
+    const visible = new Set(tableNodes.map((n) => n.id));
+    const placed = Object.fromEntries(
+      tableNodes.map((n) => [n.id, n.position]),
+    );
+    const stubs = foreignKeyStubs(model, placed, visible);
+    return {
+      nodes: [...tableNodes, ...stubs.nodes] as (
+        TableNodeType | CompactNodeType | StubNodeType
+      )[],
+      edges: [...foreignKeyEdges(model, positions, visible), ...stubs.edges],
+    };
+  }, [tableNodes, model, positions]);
   // a dragged table tells the layout store where it is, which saves it a moment later
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     for (const change of changes)
@@ -84,10 +112,6 @@ function CanvasContent() {
         void fitView({ nodes: [{ id: node.id }], maxZoom: 1, duration: 300 });
     },
     [fitView],
-  );
-  const edges = useMemo(
-    () => foreignKeyEdges(model, positions),
-    [model, positions],
   );
   return (
     <div data-layout={status} className="h-full w-full">

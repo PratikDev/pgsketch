@@ -6,6 +6,7 @@ import { fixtureModel } from '@/test-model';
 import { emptyModel } from '@/stores/schema/core';
 import { layoutStore } from '@/stores/layout';
 import { schemaStore } from '@/stores/schema';
+import { uiStore } from '@/stores/ui';
 import { installFakeApi } from '@/test-utils';
 import { Canvas } from './Canvas';
 
@@ -25,6 +26,7 @@ const load = async (model = fixtureModel) => {
 };
 
 afterEach(async () => {
+  act(() => uiStore.getState().showAllSchemas());
   saved.positions = {};
   await load(emptyModel());
 });
@@ -48,6 +50,11 @@ vi.mock('@/layout/autoLayout', async (original) => {
   };
 });
 
+// a hidden element has no accessible name, so tables are found by their label
+const tableOf = (name: string) =>
+  screen
+    .getAllByRole('region', { hidden: true })
+    .find((r) => r.getAttribute('aria-label') === name);
 const nodes = (container: HTMLElement) =>
   container.querySelectorAll('.react-flow__node');
 // React Flow keeps a node hidden until the browser has measured it, which jsdom never does
@@ -106,6 +113,80 @@ describe('Canvas', () => {
     act(() => schemaStore.getState().renameTable('t:10', 'people'));
     expect(tableNames()).toContain('public.people');
     expect(tableNames()).not.toContain('public.users');
+  });
+
+  test('marks what the user changed: a renamed column, an added table, a removed table', async () => {
+    await load();
+    render(
+      <div style={{ width: 800, height: 600 }}>
+        <Canvas />
+      </div>,
+    );
+    const rowOf = (name: string, column: string) =>
+      screen
+        .getAllByRole('listitem', { hidden: true })
+        .find(
+          (li) =>
+            li.closest('section')?.getAttribute('aria-label') === name &&
+            li.textContent?.startsWith(column),
+        );
+    expect(rowOf('billing.invoices', 'total')).not.toHaveAttribute(
+      'data-status',
+    );
+
+    act(() => schemaStore.getState().renameColumn('c:20:3', 'amount'));
+    expect(rowOf('billing.invoices', 'amount')).toHaveAttribute(
+      'data-status',
+      'modified',
+    );
+    expect(rowOf('billing.invoices', 'amount')).toHaveAttribute(
+      'title',
+      'Was: name total',
+    );
+
+    act(() => void schemaStore.getState().removeTable('t:10'));
+    expect(tableOf('public.users')).toHaveAttribute('data-status', 'removed');
+
+    act(() => void schemaStore.getState().addTable('s:1'));
+    expect(tableOf('public.new_table')).toHaveAttribute('data-status', 'added');
+  });
+
+  test('hiding a schema removes its tables, and a key into it ends in a stub', async () => {
+    await load();
+    const { container } = render(
+      <div style={{ width: 800, height: 600 }}>
+        <Canvas />
+      </div>,
+    );
+    act(() => uiStore.getState().toggleSchema('s:1')); // public: users and events
+    expect(tableNames()).toEqual(['billing.invoices']);
+    const stubs = container.querySelectorAll('.react-flow__node-stub');
+    expect(stubs).toHaveLength(1);
+    expect(stubs[0]).toHaveTextContent('→ public.users');
+    act(() => uiStore.getState().showAllSchemas());
+    expect(nodes(container)).toHaveLength(3);
+    expect(container.querySelectorAll('.react-flow__node-stub')).toHaveLength(
+      0,
+    );
+  });
+
+  test('a table that was hidden is where it was when it is shown again', async () => {
+    saved.positions = { 't:10': { x: 900, y: 700 } };
+    await load();
+    const { container } = render(
+      <div style={{ width: 800, height: 600 }}>
+        <Canvas />
+      </div>,
+    );
+    const place = () =>
+      [...nodes(container)]
+        .find((n) => n.getAttribute('data-id') === 't:10')
+        ?.getAttribute('style');
+    expect(place()).toMatch(/translate\(900px,\s*700px\)/);
+    act(() => uiStore.getState().toggleSchema('s:1'));
+    expect(place()).toBeUndefined();
+    act(() => uiStore.getState().toggleSchema('s:1'));
+    expect(place()).toMatch(/translate\(900px,\s*700px\)/);
   });
 
   test('every node has its own position, so no two tables are drawn on top of each other', async () => {

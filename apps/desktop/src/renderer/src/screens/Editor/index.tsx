@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Canvas } from '@/canvas/Canvas';
+import { SchemaFilter } from '@/chrome/SchemaFilter';
 import { layoutStore } from '@/stores/layout';
 import type { SessionInfo } from '../../../../shared/ipc-contract';
 import { useLoadSchema } from './use-load-schema';
@@ -33,9 +34,12 @@ export function Editor({
             </AlertDescription>
           </Alert>
         )}
-        <Button variant="outline" className="ml-auto" onClick={onDisconnect}>
-          Disconnect
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          {load.status === 'ready' && <SchemaFilter />}
+          <Button variant="outline" onClick={onDisconnect}>
+            Disconnect
+          </Button>
+        </div>
       </header>
       <div className="min-h-0 flex-1">
         {load.status === 'loading' && (
