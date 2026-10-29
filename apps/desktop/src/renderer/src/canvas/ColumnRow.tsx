@@ -9,7 +9,7 @@ import { InlineText } from '@/editors/InlineText';
 import { TypePicker } from '@/editors/TypePicker';
 import { schemaStore } from '@/stores/schema';
 import { uiStore } from '@/stores/ui';
-import { addColumnAndEdit } from './column-actions';
+import { addColumnAndEdit, restoreColumn } from './column-actions';
 import { KeyBadges } from './KeyBadges';
 import { RowMenu } from './RowMenu';
 import { isEditable, stateClasses, stateTitle } from './object-state';
@@ -24,14 +24,20 @@ export function ColumnRow({
   last?: boolean;
 }) {
   const editable = isEditable(column.state);
+  const removed = column.state.status?.status === 'removed';
   return (
     <li
       style={{ height: ROW_HEIGHT }}
       title={stateTitle(column.state)}
       data-status={column.state.status?.status}
       aria-invalid={column.state.error !== null || undefined}
+      // a removed row is brought back by a click
+      onClick={
+        removed ? () => restoreColumn(column.id, column.tableId) : undefined
+      }
       className={cn(
         'group/row relative flex items-center gap-2 px-3 text-sm',
+        removed && 'cursor-pointer',
         stateClasses(column.state),
       )}
     >

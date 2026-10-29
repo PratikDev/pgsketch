@@ -36,7 +36,7 @@ describe('foreignKeyEdges', () => {
       type: 'fk',
       source: 't:20',
       target: 't:10',
-      data: { selfReference: false },
+      data: { selfReference: false, removed: false },
     });
   });
 
@@ -74,7 +74,7 @@ describe('foreignKeyEdges', () => {
       {},
     );
     const loop = edges.find((e) => e.id === 'k:self')!;
-    expect(loop.data).toEqual({ selfReference: true });
+    expect(loop.data).toEqual({ selfReference: true, removed: false });
     expect(loop.source).toBe(loop.target);
     expect(loop.sourceHandle).toBe(handleId('c:10:2', 'right', 'source'));
     expect(loop.targetHandle).toBe(handleId('c:10:1', 'right', 'target'));
@@ -119,6 +119,17 @@ describe('foreignKeyEdges', () => {
       ),
     );
     expect(new Set(ids).size).toBe(4);
+  });
+});
+
+describe('foreignKeyEdges with removed keys', () => {
+  test('marks the keys the change drops, and only those', () => {
+    const model = withKeys((m) => (m.constraints['k:self'] = selfKey));
+    const edges = foreignKeyEdges(model, {}, undefined, new Set(['k:2']));
+    expect(edges.map((e) => [e.id, e.data?.removed]).sort()).toEqual([
+      ['k:2', true],
+      ['k:self', false],
+    ]);
   });
 });
 

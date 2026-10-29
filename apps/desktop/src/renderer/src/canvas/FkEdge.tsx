@@ -68,10 +68,21 @@ export function FkEdge({
   const path = selfReference
     ? loopPath({ x: sourceX, y: sourceY }, { x: targetX, y: targetY })
     : curve;
+  const removed = data?.removed === true;
   return (
-    <g data-self-reference={selfReference}>
+    <g data-self-reference={selfReference} data-removed={removed}>
       <BaseEdge
         path={path}
+        // a key the change drops: red, dashed and faded, like a removed row
+        style={
+          removed
+            ? {
+                stroke: 'var(--destructive)',
+                strokeDasharray: '6 4',
+                opacity: 0.6,
+              }
+            : undefined
+        }
         markerStart={`url(#${CROW_FOOT})`}
         markerEnd={`url(#${ONE})`}
       />

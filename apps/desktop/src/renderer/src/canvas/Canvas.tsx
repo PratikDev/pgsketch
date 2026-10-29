@@ -69,6 +69,15 @@ function CanvasContent() {
   );
   const status = useAutoLayout(model, views);
   const positions = useLayoutStore((s) => s.positions);
+  const removedKeys = useMemo(
+    () =>
+      new Set(
+        Object.entries(statuses)
+          .filter(([, s]) => s.status === 'removed')
+          .map(([id]) => id),
+      ),
+    [statuses],
+  );
   const hiddenSchemas = useUiStore((s) => s.hiddenSchemas);
   // tables of a hidden schema stay laid out and positioned, they are just not drawn
   const tableNodes = useMemo<(TableNodeType | CompactNodeType)[]>(
@@ -97,9 +106,12 @@ function CanvasContent() {
       nodes: [...tableNodes, ...stubs.nodes] as (
         TableNodeType | CompactNodeType | StubNodeType
       )[],
-      edges: [...foreignKeyEdges(model, positions, visible), ...stubs.edges],
+      edges: [
+        ...foreignKeyEdges(model, positions, visible, removedKeys),
+        ...stubs.edges,
+      ],
     };
-  }, [tableNodes, model, positions]);
+  }, [tableNodes, model, positions, removedKeys]);
   // a dragged table tells the layout store where it is, which saves it a moment later
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     for (const change of changes)

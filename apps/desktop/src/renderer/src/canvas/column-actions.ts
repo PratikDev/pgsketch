@@ -13,3 +13,13 @@ export function deleteColumn(columnId: Id): void {
   const reason = schemaStore.getState().removeColumn(columnId);
   if (reason) uiStore.getState().showNotice(reason);
 }
+
+/**
+ * Brings a removed column back. If its table is removed too, the column can't be there without
+ * it, so the table comes back, with everything that went with it.
+ */
+export function restoreColumn(columnId: Id, tableId: Id): void {
+  const { desired, restoreColumn, restoreTable } = schemaStore.getState();
+  if (desired.tables[tableId]) restoreColumn(columnId);
+  else restoreTable(tableId);
+}

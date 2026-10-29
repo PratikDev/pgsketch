@@ -7,7 +7,11 @@ import {
   ROW_HEIGHT,
 } from '@/layout/autoLayout';
 
-export type FkEdgeData = { selfReference: boolean };
+export type FkEdgeData = {
+  selfReference: boolean;
+  /** The change drops this foreign key. */
+  removed: boolean;
+};
 export type FkEdgeType = Edge<FkEdgeData, 'fk'>;
 
 /** The id of one of the four handles of a column row: which side it is on, and what it connects as. */
@@ -52,6 +56,7 @@ export function foreignKeyEdges(
   model: SchemaModel,
   positions: Record<Id, { x: number }>,
   visible?: ReadonlySet<Id>,
+  removed: ReadonlySet<Id> = new Set(),
 ): FkEdgeType[] {
   return Object.values(model.constraints).flatMap((constraint) => {
     const ends = endsOf(model, constraint);
@@ -78,7 +83,7 @@ export function foreignKeyEdges(
           selfReference ? 'right' : forward ? 'left' : 'right',
           'target',
         ),
-        data: { selfReference },
+        data: { selfReference, removed: removed.has(key.id) },
       },
     ];
   });
@@ -147,7 +152,7 @@ export function foreignKeyStubs(
       target: id,
       sourceHandle: handleId(from, 'right', 'source'),
       targetHandle: STUB_HANDLE,
-      data: { selfReference: false },
+      data: { selfReference: false, removed: false },
     });
   }
   return { nodes, edges };

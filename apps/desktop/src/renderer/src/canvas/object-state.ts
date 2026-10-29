@@ -93,7 +93,7 @@ export function stateTitle({
     error,
     readOnly && `Read-only: ${READ_ONLY_LABELS[readOnly]}`,
     status?.status === 'modified' && `Was: ${oldText(status.old)}`,
-    status?.status === 'removed' && 'Removed; the change drops it',
+    status?.status === 'removed' && 'Removed; click to restore',
   ].filter(Boolean);
   return lines.length > 0 ? lines.join('\n') : undefined;
 }

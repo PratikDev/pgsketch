@@ -168,3 +168,36 @@ describe('deleting a column', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('restoring by a click', () => {
+  test('a click on a removed column brings it back, and a click on a plain one does nothing', async () => {
+    render(<Live tableId="t:20" />);
+    await userEvent.click(rowOf('user_id'));
+    expect(columnsOf('t:20')).toEqual(['id', 'user_id', 'total']);
+    act(() => void schemaStore.getState().removeColumn('c:20:2'));
+    expect(rowOf('user_id')).toHaveAttribute('data-status', 'removed');
+    expect(rowOf('user_id')).toHaveAttribute(
+      'title',
+      expect.stringContaining('click to restore'),
+    );
+    await userEvent.click(rowOf('user_id'));
+    expect(columnsOf('t:20')).toContain('user_id');
+    expect(rowOf('user_id')).not.toHaveAttribute('data-status');
+  });
+
+  test('the row of a column of a removed table brings the whole table back', async () => {
+    render(<Live tableId="t:10" />);
+    act(() => void schemaStore.getState().removeTable('t:10'));
+    expect(schemaStore.getState().desired.tables['t:10']).toBeUndefined();
+    await userEvent.click(rowOf('status'));
+    expect(schemaStore.getState().desired.tables['t:10']).toBeDefined();
+    expect(columnsOf('t:10')).toEqual(['id', 'status']);
+  });
+
+  test('a click on the header of a removed table brings it back', async () => {
+    render(<Live tableId="t:10" />);
+    act(() => void schemaStore.getState().removeTable('t:10'));
+    await userEvent.click(screen.getByRole('banner'));
+    expect(schemaStore.getState().desired.tables['t:10']).toBeDefined();
+  });
+});

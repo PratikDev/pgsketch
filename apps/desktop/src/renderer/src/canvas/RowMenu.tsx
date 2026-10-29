@@ -6,8 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { schemaStore } from '@/stores/schema';
-import { deleteColumn } from './column-actions';
+import { deleteColumn, restoreColumn } from './column-actions';
 import type { ColumnView } from './model-view';
 
 /** The `⋯` at the end of a row, which shows when the row is hovered or has focus: delete the column, or bring a removed one back. */
@@ -20,6 +19,8 @@ export function RowMenu({ column }: { column: ColumnView }) {
           variant="ghost"
           size="icon-xs"
           aria-label="Column actions"
+          // the row restores a removed column when clicked; the menu does it on its own
+          onClick={(event) => event.stopPropagation()}
           className="nodrag opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
         >
           <MoreHorizontalIcon />
@@ -28,7 +29,7 @@ export function RowMenu({ column }: { column: ColumnView }) {
       <DropdownMenuContent align="end">
         {removed ? (
           <DropdownMenuItem
-            onSelect={() => schemaStore.getState().restoreColumn(column.id)}
+            onSelect={() => restoreColumn(column.id, column.tableId)}
           >
             Restore column
           </DropdownMenuItem>
