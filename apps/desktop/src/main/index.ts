@@ -10,6 +10,7 @@ import { createLogger, fileSink } from './log';
 import { resolveAppPaths } from './paths';
 import { createSession } from './session';
 import { openConnection } from './services/connection';
+import { openTaskConnection } from './services/task-connection';
 import { createSecrets } from './services/secrets';
 import { createConnectionsRepo } from './store/connections';
 import { createLayoutsRepo } from './store/layouts';
@@ -95,6 +96,7 @@ if (!app.requestSingleInstanceLock()) {
       session,
       emit,
       open: openConnection,
+      openTask: openTaskConnection,
       osUser: userInfo().username,
       socketPath: '/var/run/postgresql',
     });

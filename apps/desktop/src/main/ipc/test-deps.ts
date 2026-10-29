@@ -50,6 +50,10 @@ export function testDeps(over: Partial<IpcDeps> = {}) {
       events.push({ event, payload: payload[0] });
     },
     open: async () => fakeServerConnection(),
+    openTask: async () => ({
+      ...fakeServerConnection(),
+      rolledBack: (work) => work(async () => []),
+    }),
     osUser: 'tester',
     socketPath: '/var/run/postgresql',
     ...over,

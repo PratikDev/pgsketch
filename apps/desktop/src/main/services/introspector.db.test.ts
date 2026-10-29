@@ -7,6 +7,7 @@ import { registerSchema } from '../ipc/schema';
 import { testDeps } from '../ipc/test-deps';
 import { openConnection, type ServerConnection } from './connection';
 import { loadSchema } from './introspector';
+import { createNormalizer } from './normalizer';
 
 // the same fixture every introspection test in core starts from
 const FIXTURE = join(
@@ -73,6 +74,7 @@ describe('loadSchema', () => {
     const { deps } = testDeps();
     await deps.session.replace({
       connection,
+      normalizer: createNormalizer(() => Promise.reject(new Error('unused'))),
       info: {
         serverVersion: '16',
         database: 'x',

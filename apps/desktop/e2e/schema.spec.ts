@@ -77,3 +77,52 @@ test('asking for the schema with no database open is an error the renderer can r
   expect(message).toContain('No database is open');
   await app.close();
 });
+
+test('expr.normalize asks the open database, on a connection of its own', async () => {
+  const { app, window } = await launchApp();
+  const params = {
+    kind: 'params',
+    host: server.host,
+    port: server.port,
+    user: E2E_USER,
+    password: E2E_PASSWORD,
+    database: server.database,
+    sslMode: 'disable',
+  };
+  await window.evaluate(
+    `window.api.invoke('connection.open', ${JSON.stringify({ params, remember: false })})`,
+  );
+  const ask = (expression: string) =>
+    window.evaluate<{ status: string; expression?: string; message?: string }>(
+      `window.api.invoke('expr.normalize', ${JSON.stringify({
+        expression,
+        target: { kind: 'default', columnId: 'c1' },
+        columns: [
+          { id: 'c1', name: 'status', type: { name: 'text', isArray: false } },
+        ],
+      })})`,
+    );
+  expect(await ask("'active'")).toMatchObject({
+    status: 'normalized',
+    expression: "'active'::text",
+  });
+  expect(await ask('nonsense(')).toMatchObject({ status: 'invalid' });
+
+  // the main connection and the one for expressions are two backends
+  const backends = await server.admin.query<{ n: string }>(
+    `SELECT count(*) AS n FROM pg_stat_activity
+      WHERE application_name = 'pgsketch' AND datname = $1`,
+    [server.database],
+  );
+  expect(Number(backends.rows[0]!.n)).toBe(2);
+  await app.close();
+});
+
+test('asking to normalize with no database open is an error the renderer can read', async () => {
+  const { app, window } = await launchApp();
+  const message = await window.evaluate<string>(
+    `window.api.invoke('expr.normalize', { expression: '1', target: { kind: 'check' }, columns: [] }).then(() => 'answered', (e) => e.message)`,
+  );
+  expect(message).toContain('No database is open');
+  await app.close();
+});

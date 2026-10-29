@@ -28,3 +28,4 @@ export type {
 } from './normalize/expression';
 export { blockersOfColumn, blockersOfTable } from './diff/readonly-guard';
 export { renderPgType } from './sql/pgtype';
+export { quoteIdent, quoteLiteral } from './sql/quote';

@@ -1,5 +1,6 @@
 import { registerApp } from './app';
 import { registerConnection } from './connection';
+import { registerExpr } from './expr';
 import { registerLayouts } from './layouts';
 import type { IpcDeps } from './deps';
 import type { IpcRegistry } from './register';
@@ -11,6 +12,7 @@ type RegisterDomain = (ipc: IpcRegistry, deps: IpcDeps) => void;
 const domains: RegisterDomain[] = [
   registerApp,
   registerConnection,
+  registerExpr,
   registerLayouts,
   registerSchema,
 ];

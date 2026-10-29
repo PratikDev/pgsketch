@@ -5,6 +5,7 @@ import type {
 } from '../../shared/ipc-contract';
 import { redact } from '../log';
 import { ConnectionError } from '../services/errors';
+import { createNormalizer } from '../services/normalizer';
 import { SecretsUnavailableError } from '../services/secrets';
 import {
   dbKeyFor,
@@ -51,7 +52,11 @@ export function registerConnection(ipc: IpcRegistry, deps: IpcDeps): void {
         dbKey: dbKeyFor(params, saved?.connectionId ?? null),
         saved,
       };
-      await session.replace({ connection, info });
+      // expressions are normalized on a connection of its own, opened when the first one is asked
+      const normalizer = createNormalizer((onLost) =>
+        deps.openTask(params, { onLost }),
+      );
+      await session.replace({ connection, normalizer, info });
       return info;
     } catch (error) {
       await connection.close().catch(() => undefined);
