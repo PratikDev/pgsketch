@@ -548,6 +548,157 @@ test('the toolbar stays while the pointer moves from the table up to it', async 
   await app.close();
 });
 
+test('a new table moves to a new schema from its schema picker, and a table in the database has none', async () => {
+  const { app, window } = await openEditor();
+  await zoomUntil(window, false);
+  const at = await emptyPoint(window);
+  await window.mouse.dblclick(at.x, at.y);
+  await expect(
+    window.getByRole('textbox', { name: 'Table name' }),
+  ).toBeFocused();
+  await window.keyboard.type('tags');
+  await window.keyboard.press('Enter');
+
+  const tags = window.getByRole('region', { name: 'public.tags' });
+  await tags.getByRole('button', { name: 'Schema' }).click();
+  await window.getByRole('menuitem', { name: 'New schema…' }).click();
+  // the name is typed in the menu's row
+  await expect(
+    window.getByRole('textbox', { name: 'Schema name' }),
+  ).toBeFocused();
+  await window.keyboard.type('audit');
+  await window.keyboard.press('Enter');
+  await window.keyboard.press('Escape');
+  await expect(
+    window.getByRole('region', { name: 'audit.tags' }),
+  ).toHaveAttribute('data-status', 'added');
+
+  // the new schema is one of the schemas now
+  await window.getByRole('button', { name: /^Schemas/ }).click();
+  await expect(
+    window.getByRole('menuitemcheckbox', { name: 'audit' }),
+  ).toBeVisible();
+  await window.keyboard.press('Escape');
+
+  // a table that is in the database can't move: no picker
+  await expect(
+    window
+      .getByRole('region', { name: 'billing.invoices' })
+      .getByRole('button', { name: 'Schema' }),
+  ).toHaveCount(0);
+  await app.close();
+});
+
+test('deleting a referenced table marks the keys into it removed, and restoring it brings them back', async () => {
+  const { app, window } = await openEditor('public.users');
+  const users = window.getByRole('region', { name: 'public.users' });
+  const removedKeys = window.locator(
+    '.react-flow__edge g[data-removed="true"]',
+  );
+  await expect(window.locator('.react-flow__edge')).toHaveCount(3);
+  await expect(removedKeys).toHaveCount(0);
+
+  await users.locator('header').click();
+  await window.getByRole('button', { name: 'Delete table' }).click();
+  await expect(users).toHaveAttribute('data-status', 'removed');
+  // its own key to itself, and invoices' key to it; the key between invoices and line_items stays
+  await expect(removedKeys).toHaveCount(2);
+  await expect(window.locator('.react-flow__edge')).toHaveCount(3);
+  await expect(window.getByText('2 changes', { exact: false })).toBeVisible();
+
+  // a click on the table brings it and the keys back
+  await users.locator('header').click();
+  await expect(users).not.toHaveAttribute('data-status');
+  await expect(removedKeys).toHaveCount(0);
+  await expect(window.getByText('0 changes', { exact: true })).toBeVisible();
+
+  // and a removed column comes back by a click on its row
+  await window.getByRole('button', { name: 'fit view' }).click();
+  await showTable(window, 'billing.line_items');
+  const row = rowOf(window, 'billing.line_items', 'label');
+  await row.hover();
+  await row.getByRole('button', { name: 'Column actions' }).click();
+  await window.getByRole('menuitem', { name: 'Delete column' }).click();
+  const removedRow = window
+    .getByRole('region', { name: 'billing.line_items' })
+    .getByRole('listitem')
+    .filter({ hasText: 'label' });
+  await expect(removedRow).toHaveAttribute('data-status', 'removed');
+  await removedRow.click();
+  await expect(removedRow).not.toHaveAttribute('data-status');
+  await app.close();
+});
+
+test('a schema the migration creates is renamed and deleted from the pen and the trash can, in both menus', async () => {
+  const { app, window } = await openEditor();
+  await zoomUntil(window, false);
+  const at = await emptyPoint(window);
+  await window.mouse.dblclick(at.x, at.y);
+  await expect(
+    window.getByRole('textbox', { name: 'Table name' }),
+  ).toBeFocused();
+  await window.keyboard.type('tags');
+  await window.keyboard.press('Enter');
+  // the table's name changes with its schema, so it is found by its own part
+  const tags = window.getByRole('region', { name: /\.tags$/ });
+
+  // make a schema, then give it a name with the pen of the Schemas menu
+  await tags.getByRole('button', { name: 'Schema' }).click();
+  await window.getByRole('menuitem', { name: 'New schema…' }).click();
+  await window.keyboard.press('Escape'); // gives up the name: it stays new_schema
+  await expect(
+    window.getByRole('region', { name: 'new_schema.tags' }),
+  ).toBeVisible();
+  await window.getByRole('button', { name: /^Schemas/ }).click();
+  const rowOf = (name: string) =>
+    window.getByRole('menuitemcheckbox', { name: new RegExp(`^${name}`) });
+  // the schemas in the database have neither icon
+  await expect(rowOf('billing').getByRole('button')).toHaveCount(0);
+  await expect(rowOf('public').getByRole('button')).toHaveCount(0);
+  await window
+    .getByRole('button', { name: 'Rename schema new_schema' })
+    .click();
+  await expect(
+    window.getByRole('textbox', { name: 'Schema name' }),
+  ).toBeFocused();
+  await window.keyboard.type('audit');
+  await window.keyboard.press('Enter');
+  // (the page is hidden to assistive technology while a menu is open)
+  await expect(
+    window.getByRole('region', { name: 'audit.tags', includeHidden: true }),
+  ).toBeVisible();
+  // clicking the pen did not tick or untick the row
+  await expect(rowOf('audit')).toHaveAttribute('aria-checked', 'true');
+  await window.keyboard.press('Escape');
+
+  // a schema with a table in it can't be deleted; the reason is shown
+  await window.getByRole('button', { name: /^Schemas/ }).click();
+  await window.getByRole('button', { name: 'Delete schema audit' }).click();
+  await expect(
+    window.getByText(/Can't delete schema "audit": table "tags" is in it/),
+  ).toBeVisible();
+  await window.keyboard.press('Escape');
+
+  // move the table out, and the empty schema can go
+  await tags.getByRole('button', { name: 'Schema' }).click();
+  await window.getByRole('menuitemradio', { name: /^public/ }).click();
+  await window.keyboard.press('Escape');
+  await expect(
+    window.getByRole('region', { name: 'public.tags' }),
+  ).toBeVisible();
+  await tags.getByRole('button', { name: 'Schema' }).click();
+  await window.getByRole('button', { name: 'Delete schema audit' }).click();
+  await expect(
+    window.getByRole('menuitemradio', { name: /^audit/ }),
+  ).toHaveCount(0);
+  await window.keyboard.press('Escape');
+  await window.getByRole('button', { name: /^Schemas/ }).click();
+  await expect(
+    window.getByRole('menuitemcheckbox', { name: /^audit/ }),
+  ).toHaveCount(0);
+  await app.close();
+});
+
 test('a new table goes in the one schema the filter leaves showing', async () => {
   const { app, window } = await openEditor();
   await window.getByRole('button', { name: /^Schemas/ }).click();
