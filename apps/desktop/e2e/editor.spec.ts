@@ -270,7 +270,8 @@ test('renaming a column: it turns amber and the change count goes up', async () 
     .getByRole('button', { name: 'label', exact: true })
     .click();
   await window.keyboard.type('title');
-  await window.keyboard.press('Enter');
+  // Tab, not Enter: label is the last column, and Enter there goes on to a new one
+  await window.keyboard.press('Tab');
 
   const row = rowOf(window, 'billing.line_items', 'title');
   await expect(row).toHaveAttribute('data-status', 'modified');
@@ -384,11 +385,180 @@ test('NN, PK and UQ switch on click; PK turns NN on and locks it, and identity l
   // the three switches and the chips never squeeze a name out of its row
   const names = window
     .getByRole('region', { name: 'billing.line_items' })
-    .locator('li > button, li > span:first-child');
+    .locator('li > :first-child');
   for (const name of await names.all())
     expect(await name.evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(
       true,
     );
+  await app.close();
+});
+
+test('three columns are made with the keyboard alone, and one is deleted from its menu', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  const table = window.getByRole('region', { name: 'billing.line_items' });
+  await expect(table.getByRole('listitem')).toHaveCount(4);
+
+  // Enter on the last column goes on to a new one with its name ready to type
+  await rowOf(window, 'billing.line_items', 'label')
+    .getByRole('button', { name: 'label', exact: true })
+    .click();
+  const name = window.getByRole('textbox', { name: 'Column name' });
+  await window.keyboard.press('Enter');
+  for (const text of ['first', 'second', 'third']) {
+    await expect(name).toBeFocused();
+    await window.keyboard.type(text);
+    await window.keyboard.press('Enter');
+  }
+  // the column that Enter made after the third is given up with Esc
+  await expect(name).toBeFocused();
+  await window.keyboard.press('Escape');
+
+  await expect(table.getByRole('listitem')).toHaveCount(7);
+  for (const name of ['first', 'second', 'third'])
+    await expect(rowOf(window, 'billing.line_items', name)).toHaveAttribute(
+      'data-status',
+      'added',
+    );
+  await expect(table.getByText('new_column')).toHaveCount(0);
+  await expect(window.getByText('3 changes', { exact: true })).toBeVisible();
+
+  // Tab goes from a name to the type of the same row
+  await rowOf(window, 'billing.line_items', 'first')
+    .getByRole('button', { name: 'first', exact: true })
+    .click();
+  await window.keyboard.press('Tab');
+  await expect(
+    rowOf(window, 'billing.line_items', 'first').getByRole('button', {
+      name: 'Column type',
+    }),
+  ).toBeFocused();
+
+  // the menu at the end of a row
+  const third = rowOf(window, 'billing.line_items', 'third');
+  await third.hover();
+  await third.getByRole('button', { name: 'Column actions' }).click();
+  await window.getByRole('menuitem', { name: 'Delete column' }).click();
+  await expect(table.getByRole('listitem')).toHaveCount(6);
+  await expect(window.getByText('2 changes', { exact: true })).toBeVisible();
+
+  // a column of the database stays on the canvas struck through, and comes back
+  const title = rowOf(window, 'billing.line_items', 'label');
+  await title.hover();
+  await title.getByRole('button', { name: 'Column actions' }).click();
+  await window.getByRole('menuitem', { name: 'Delete column' }).click();
+  await expect(
+    table.getByRole('listitem').filter({ hasText: 'label' }),
+  ).toHaveAttribute('data-status', 'removed');
+  await expect(table.getByRole('listitem')).toHaveCount(6);
+  await app.close();
+});
+
+/** A point on the empty canvas: where the pane, not a table, a line or a control, is under the cursor. */
+const emptyPoint = (window: Page) =>
+  window.evaluate<{ x: number; y: number }>(`(() => {
+    const box = document.querySelector('.react-flow').getBoundingClientRect();
+    for (let y = box.top + 30; y < box.bottom - 80; y += 30)
+      for (let x = box.left + 30; x < box.right - 340; x += 30)
+        if (document.elementFromPoint(x, y)?.classList.contains('react-flow__pane'))
+          return { x, y };
+    throw new Error('no empty canvas');
+  })()`);
+
+test('a double-click on the empty canvas makes a table at the cursor with its name ready', async () => {
+  const { app, window } = await openEditor();
+  await zoomUntil(window, false);
+  const at = await emptyPoint(window);
+  await window.mouse.dblclick(at.x, at.y);
+
+  const created = window.getByRole('region', { name: 'public.new_table' });
+  await expect(created).toBeVisible();
+  const box = (await created.boundingBox())!;
+  expect(Math.abs(box.x - at.x)).toBeLessThan(3);
+  expect(Math.abs(box.y - at.y)).toBeLessThan(3);
+  await expect(created).toHaveAttribute('data-status', 'added');
+  // it starts with an identity key, and its name is the input with the focus
+  await expect(created.getByRole('listitem')).toHaveCount(1);
+  const name = window.getByRole('textbox', { name: 'Table name' });
+  await expect(name).toBeFocused();
+  await window.keyboard.type('tags');
+  await window.keyboard.press('Enter');
+  await expect(
+    window.getByRole('region', { name: 'public.tags' }),
+  ).toBeVisible();
+
+  // the toolbar of the table: add a column, then delete the table
+  const tags = window.getByRole('region', { name: 'public.tags' });
+  await tags.locator('header').click();
+  await window.getByRole('button', { name: 'Add column' }).click();
+  await expect(tags.getByRole('listitem')).toHaveCount(2);
+  await expect(
+    window.getByRole('textbox', { name: 'Column name' }),
+  ).toBeFocused();
+  await window.keyboard.press('Escape');
+  await expect(tags.getByRole('listitem')).toHaveCount(1);
+  await tags.locator('header').click();
+  await window.getByRole('button', { name: 'Delete table' }).click();
+  await expect(window.getByRole('region', { name: 'public.tags' })).toHaveCount(
+    0,
+  );
+  await expect(window.locator('.react-flow__node')).toHaveCount(3);
+
+  // a double-click on a table does nothing
+  await window
+    .getByRole('region', { name: 'billing.invoices' })
+    .dblclick({ position: { x: 20, y: 20 } });
+  await expect(window.locator('.react-flow__node')).toHaveCount(3);
+  await app.close();
+});
+
+test('the type picker closes on a click on the empty canvas', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  await window
+    .getByRole('region', { name: 'billing.line_items' })
+    .getByRole('button', { name: 'Column type' })
+    .first()
+    .click();
+  await expect(window.getByPlaceholder('Search types…')).toBeVisible();
+  const at = await emptyPoint(window);
+  await window.mouse.click(at.x, at.y);
+  await expect(window.getByPlaceholder('Search types…')).toHaveCount(0);
+  await app.close();
+});
+
+test('the toolbar stays while the pointer moves from the table up to it', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  const table = window.getByRole('region', { name: 'billing.line_items' });
+  const header = (await table.locator('header').boundingBox())!;
+  await window.mouse.move(header.x + 60, header.y + header.height / 2);
+  const add = window.getByRole('button', { name: 'Add column' });
+  await expect(add).toBeVisible();
+  // up through the gap to the toolbar, one pixel at a time, and the toolbar never goes away
+  const target = (await add.boundingBox())!;
+  const [x, y] = [target.x + target.width / 2, target.y + target.height / 2];
+  const startY = header.y + header.height / 2;
+  for (let i = 1; i <= 40; i++) {
+    await window.mouse.move(
+      header.x + 60 + ((x - header.x - 60) * i) / 40,
+      startY + ((y - startY) * i) / 40,
+    );
+    await expect(add).toBeVisible({ timeout: 100 });
+  }
+  await add.click();
+  await expect(table.getByRole('listitem')).toHaveCount(5);
+  await app.close();
+});
+
+test('a new table goes in the one schema the filter leaves showing', async () => {
+  const { app, window } = await openEditor();
+  await window.getByRole('button', { name: /^Schemas/ }).click();
+  await window.getByRole('menuitemcheckbox', { name: 'public' }).click();
+  await window.keyboard.press('Escape');
+  await zoomUntil(window, false);
+  const at = await emptyPoint(window);
+  await window.mouse.dblclick(at.x, at.y);
+  await expect(
+    window.getByRole('region', { name: 'billing.new_table' }),
+  ).toBeVisible();
   await app.close();
 });
 
