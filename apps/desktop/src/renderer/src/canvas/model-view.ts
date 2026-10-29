@@ -29,8 +29,11 @@ export function unionOf(
 
 export type ColumnView = {
   id: Id;
+  tableId: Id;
   name: string;
   type: string;
+  /** The type itself, which `type` is the label of. */
+  pgType: PgType;
   primaryKey: boolean;
   notNull: boolean;
   identity: boolean;
@@ -92,8 +95,10 @@ export function tableViews(
 
   const columnView = (column: Column, schemaId: Id): ColumnView => ({
     id: column.id,
+    tableId: column.tableId,
     name: column.name,
     type: typeLabel(column.type),
+    pgType: column.type,
     primaryKey: keyColumns.has(column.id),
     notNull: column.notNull,
     identity: column.identity !== null,

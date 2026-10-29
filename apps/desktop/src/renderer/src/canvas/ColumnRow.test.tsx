@@ -7,8 +7,10 @@ import type { ObjectState } from './object-state';
 
 const column = (over: Partial<ColumnView> = {}): ColumnView => ({
   id: 'c',
+  tableId: 't',
   name: 'email',
   type: 'text',
+  pgType: { name: 'text', isArray: false },
   primaryKey: false,
   notNull: false,
   identity: false,

@@ -95,7 +95,7 @@ describe('the PK, NN and UQ switches', () => {
   test('none of them can be used on a read-only column or a removed one', () => {
     act(() => void schemaStore.getState().removeColumn('c:20:2'));
     render(<ReadOnlyOrRemoved />);
-    for (const b of screen.getAllByRole('button')) expect(b).toBeDisabled();
+    for (const name of ['PK', 'NN', 'UQ']) expect(badge(name)).toBeDisabled();
   });
 });
 
