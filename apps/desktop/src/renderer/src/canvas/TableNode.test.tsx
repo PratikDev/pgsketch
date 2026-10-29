@@ -1,4 +1,5 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { describe, expect, test } from 'vitest';
 import {
@@ -130,6 +131,38 @@ describe('TableNode', () => {
         within(within(table).getByRole('banner')).getByLabelText('Read-only'),
       ).toBeInTheDocument();
       expect(table).toHaveAttribute('title', 'Read-only: partitioned table');
+    });
+  });
+
+  describe('the toolbar safety zone', () => {
+    const zone = () =>
+      document.querySelector('[data-slot="toolbar-safe-zone"]');
+
+    test('is there while the table is hovered, covering the gap above it, and gone when the pointer leaves', async () => {
+      render(
+        <ReactFlowProvider>
+          <TableNode {...props('invoices')} />
+        </ReactFlowProvider>,
+      );
+      expect(zone()).toBeNull();
+      const table = screen.getByRole('region', { name: 'billing.invoices' });
+      await userEvent.hover(table);
+      expect(zone()).toHaveClass('bottom-full', 'h-5', 'inset-x-0');
+      // it sits outside the table box, as part of the node, so it takes the hover too
+      expect(table.contains(zone())).toBe(false);
+      await userEvent.hover(zone() as Element);
+      expect(zone()).not.toBeNull();
+      await userEvent.unhover(zone() as Element);
+      expect(zone()).toBeNull();
+    });
+
+    test('is there while the table is selected', () => {
+      render(
+        <ReactFlowProvider>
+          <TableNode {...{ ...props('invoices'), selected: true }} />
+        </ReactFlowProvider>,
+      );
+      expect(zone()).not.toBeNull();
     });
   });
 });
