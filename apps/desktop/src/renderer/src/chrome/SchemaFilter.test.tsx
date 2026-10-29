@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
@@ -57,5 +57,34 @@ describe('SchemaFilter', () => {
     );
     await userEvent.click(screen.getByRole('menuitem', { name: 'Show all' }));
     expect(uiStore.getState().hiddenSchemas).toEqual([]);
+  });
+
+  test('a schema the migration creates has a pen and a trash can that work without ticking the row', async () => {
+    let id = '';
+    act(() => void (id = schemaStore.getState().addSchema()));
+    render(<SchemaFilter />);
+    await userEvent.click(screen.getByRole('button'));
+    for (const name of ['billing', 'public'])
+      expect(
+        within(screen.getByRole('menuitemcheckbox', { name })).queryByRole(
+          'button',
+        ),
+      ).not.toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Rename schema new_schema' }),
+    );
+    expect(uiStore.getState().hiddenSchemas).toEqual([]);
+    await userEvent.keyboard('audit{Enter}');
+    expect(schemaStore.getState().desired.schemas[id]!.name).toBe('audit');
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Delete schema audit' }),
+    );
+    expect(schemaStore.getState().desired.schemas[id]).toBeUndefined();
+    expect(uiStore.getState().hiddenSchemas).toEqual([]);
+    expect(
+      screen.getAllByRole('menuitemcheckbox').map((i) => i.textContent),
+    ).toEqual(['billing', 'public']);
   });
 });

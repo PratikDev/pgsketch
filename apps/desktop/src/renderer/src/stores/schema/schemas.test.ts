@@ -29,6 +29,53 @@ describe('addSchema', () => {
   });
 });
 
+describe('renameSchema', () => {
+  test('renames a pending schema, and the diff creates it under the new name', () => {
+    const id = state().addSchema();
+    expect(state().renameSchema(id, 'audit')).toBeNull();
+    expect(state().desired.schemas[id]!.name).toBe('audit');
+    expect(kinds()).toEqual(['createSchema']);
+  });
+
+  test('refuses a schema that is in the database, and changes nothing', () => {
+    expect(state().renameSchema('s:1', 'main')).toMatch(
+      /Can't rename schema "public"/,
+    );
+    expect(state().desired.schemas['s:1']!.name).toBe('public');
+    expect(state().renameSchema('nope', 'x')).toBeNull();
+  });
+});
+
+describe('removeSchema', () => {
+  test('removes a pending schema, and the diff no longer creates it', () => {
+    const id = state().addSchema();
+    expect(kinds()).toEqual(['createSchema']);
+    expect(state().removeSchema(id)).toBeNull();
+    expect(state().desired.schemas[id]).toBeUndefined();
+    expect(kinds()).toEqual([]);
+  });
+
+  test('refuses one with a table in it, naming the table, until the table has moved', () => {
+    const id = state().addSchema();
+    const table = state().addTable(id);
+    const name = state().desired.tables[table]!.name;
+    expect(state().removeSchema(id)).toBe(
+      `Can't delete schema "new_schema": table "${name}" is in it`,
+    );
+    expect(state().desired.schemas[id]).toBeDefined();
+    state().setTableSchema(table, 's:1');
+    expect(state().removeSchema(id)).toBeNull();
+  });
+
+  test('refuses a schema that is in the database, and ignores one that is not there', () => {
+    expect(state().removeSchema('s:2')).toMatch(
+      /Can't delete schema "billing"/,
+    );
+    expect(state().desired.schemas['s:2']).toBeDefined();
+    expect(state().removeSchema('nope')).toBeNull();
+  });
+});
+
 describe('setTableSchema', () => {
   test('moves a pending table to a schema that exists, and its auto-names follow', () => {
     const table = state().addTable('s:1');

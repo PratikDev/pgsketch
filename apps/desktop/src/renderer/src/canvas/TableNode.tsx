@@ -1,4 +1,5 @@
 import { InlineText } from '@/editors/InlineText';
+import { SchemaPicker } from '@/editors/SchemaPicker';
 import { HEADER_HEIGHT, NODE_WIDTH, PADDING } from '@/layout/autoLayout';
 import { cn } from '@/lib/utils';
 import { schemaStore } from '@/stores/schema';
@@ -15,6 +16,7 @@ export type TableNodeType = Node<TableView, 'table'>;
 /** A table on the canvas: `schema.table` over its columns. */
 export function TableNode({ data, selected }: NodeProps<TableNodeType>) {
   const [hovered, setHovered] = useState(false);
+  const removed = data.state.status?.status === 'removed';
   const toolbarShown = selected || hovered;
   return (
     <div
@@ -45,9 +47,18 @@ export function TableNode({ data, selected }: NodeProps<TableNodeType>) {
       >
         <header
           style={{ height: HEADER_HEIGHT }}
-          className="flex items-center truncate border-b border-border px-3 font-medium"
+          // a removed table is brought back by a click
+          onClick={
+            removed
+              ? () => schemaStore.getState().restoreTable(data.id)
+              : undefined
+          }
+          className={cn(
+            'flex items-center truncate border-b border-border px-3 font-medium',
+            removed && 'cursor-pointer',
+          )}
         >
-          <span className="text-muted-foreground">{data.schema}.</span>
+          <SchemaPicker table={data} />
           <InlineText
             id={`${data.id}:name`}
             label="Table name"

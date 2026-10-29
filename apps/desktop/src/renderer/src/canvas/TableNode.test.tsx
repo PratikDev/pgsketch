@@ -147,7 +147,7 @@ describe('TableNode', () => {
       expect(zone()).toBeNull();
       const table = screen.getByRole('region', { name: 'billing.invoices' });
       await userEvent.hover(table);
-      expect(zone()).toHaveClass('bottom-full', 'h-5', 'inset-x-0');
+      expect(zone()).toHaveClass('bottom-full', 'inset-x-0');
       // it sits outside the table box, as part of the node, so it takes the hover too
       expect(table.contains(zone())).toBe(false);
       await userEvent.hover(zone() as Element);

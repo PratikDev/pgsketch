@@ -48,6 +48,7 @@ export type ColumnView = {
 
 export type TableView = {
   id: Id;
+  schemaId: Id;
   schema: string;
   name: string;
   columns: ColumnView[];
@@ -115,6 +116,7 @@ export function tableViews(
   return Object.values(model.tables)
     .map((table) => ({
       id: table.id,
+      schemaId: table.schemaId,
       schema: model.schemas[table.schemaId]?.name ?? '',
       name: table.name,
       state: stateOf(table.id, table.readOnly, sources),
