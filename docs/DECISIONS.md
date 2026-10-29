@@ -856,3 +856,47 @@ Three things showed up when the app was tried by hand.
 **Turning UQ (or PK) on or off didn't change how the row looked.** The diff gave the new constraint a status, not the column, and a column's PK and UQ badges are drawn from those constraints. `statusMapOf` now marks a column modified, with `old: { unique: false }` or `{ primaryKey: true }` and so on, when a primary key it is in, or a unique constraint on just that column, is added or dropped (`Was: not unique`). A column that is in a key that is dropped and made again with it still in (widening a key) isn't marked. A unique constraint on several columns isn't a UQ badge, so it marks nothing.
 
 **The e2e suite was flaky under load**, failing now and then on the layout or the nodes not being ready within 5 s while two apps and the container ran together. Playwright's `expect` timeout is now 10 s (`playwright.config.ts`); the test timeout is as before.
+
+## Type picker (M4)
+
+**Date & time:** 2026-10-29 15:40
+
+`editors/TypePicker/` is the type of a column as a button that opens a shadcn `Popover` with a `Command` (cmdk, added with the CLI along with `popover`): a search box over the built-in types and the database's enums. The built-in list (`types.ts`) uses the names the model uses (`format_type`'s short names: `integer`, `bigint`, `varchar`, `timestamptz`…) and says which have parameters: `varchar` and `bpchar` a length, `numeric` a precision and a scale, `timestamp`, `timestamptz`, `time` and `timetz` a precision. Choosing a type changes the column at once; a type without parameters closes the popover, one with them stays open and shows a number input for each, and an empty input means none (a scale with no precision is dropped, since it means nothing). The array switch is a checkbox. Enums come from the loaded schema (`use-enum-types.ts`; they can't be edited in 0.1.0), listed as `schema.name`; domains and other user types are not offered.
+
+If the store refuses the change (an identity column has to stay an integer) the popover stays open and says why, and the column keeps its type. A read-only column or one being removed shows its type as plain text. `ColumnView` has `pgType` (the type itself) and `tableId` besides its `type` label.
+
+**Rationale:** the plan's type picker. Applying each change as it is made means there is no apply button, and the diff, the amber row and the change count follow while the popover is open.
+
+## Adding and deleting columns, and the keyboard (M5)
+
+**Date & time:** 2026-10-29 15:40
+
+Enter on the name of the last column of a table commits it and goes on to a new column with its name ready to type (`addColumnAndEdit`); typing a name and Enter makes the next one. Esc on a column that was made that way and not yet named takes it away again (the UI store's `addedColumn`, cleared whenever an edit ends), so a run of Enters ends with Esc and no stray `new_column`. Esc on any other name only cancels the edit. A `⋯` at the end of each row, shown when the row is hovered or has focus, deletes the column, or, for one that is being removed, restores it (the plan says "click to restore"; this is that click). A read-only column has no menu. If something depends on the column (a view, a read-only foreign key elsewhere) the store refuses and the reason is shown as a notice under the bar (`ui.notice`, with Dismiss), which the table toolbar uses too.
+
+`InlineText` changed with this: Enter and Esc give focus back to the name (a moment later, so that Enter's own key press doesn't land on the button and open it again), Tab commits and leaves the input where the browser would have taken it, and the input is focused from an effect that tries again for a few frames, because React Flow keeps a table hidden for an instant after its content changes and a hidden input can't take focus (`autoFocus` lost it every time a column was added). The plan's Tab order, name → type → next row, is the page's own order here: the PK, NN and UQ switches are tab stops between the type and the next row, so they stay reachable with the keyboard.
+
+**Rationale:** the plan's M5 ("Enter on last row adds a column") and its e2e test, three columns with the keyboard alone. The Esc rule is mine, so that the keyboard flow doesn't leave an extra column behind.
+
+## New tables and the table toolbar (M6)
+
+**Date & time:** 2026-10-29 15:40
+
+A double-click on the empty canvas makes a table with its top left corner at the cursor and its name ready to type (`createTableAt`). It does nothing on a table, and when the tables are compact (they can't be edited at that zoom). React Flow's own double-click zoom is off. The schema is `newTableSchema`: the one schema the filter leaves showing, otherwise `public` if it is shown, otherwise the first by name. The new table has the identity key column the store gives it, and its position is saved like any other (and dropped on the next load, since its id changes once it exists).
+
+`TableToolbar` is React Flow's `NodeToolbar` above the table while it is hovered or selected, with Add column (as the Enter flow: the new name is ready) and Delete table, whose refusal is shown as the notice; a removed table has only Restore table, and a read-only one has no toolbar. Add index, add check and comment come with their own phases. In the tests `NodeToolbar` is replaced by a pass-through, as jsdom has no measured node to put it next to.
+
+**Rationale:** the plan's M6. The e2e test finds a point of empty canvas on the page and checks the new table's corner is there.
+
+## The e2e suite is still flaky
+
+**Date & time:** 2026-10-29 15:40
+
+Across about a dozen full runs, some pass whole (26 of 26) and others lose one to six tests that wait for the Editor or a connection message and time out at 10 s, always on code unrelated to what changed (the connect screen's wrong password test fails too). Thirty app launches in a row in one test all got the Editor in under a second, and one with a single worker fails in clusters too, so it looks like the machine or Docker stalling now and then, not a race in the app; it has not been found. Every new test passes on its own and in the runs where the suite is whole.
+
+## Closing the type picker, and a safe strip above the table (M4, M6 follow-up)
+
+**Date & time:** 2026-10-29 16:20
+
+**The type picker stayed open when the empty canvas was clicked.** The click reached the page but the popover didn't close for it (it did for a click on the bar above the canvas; React Flow's pane is the odd one out). The picker's open state is now the UI store's `editing` (key `<column id>:type`), the "open popover" the plan lists there, instead of its own state, and `Canvas` ends any open edit on a pane click (`cancelEditing`). One side effect: opening the picker ends an inline name edit that is open, which commits it first as its input loses focus.
+
+**The toolbar went away on the way up to it.** The toolbar floats 4 px above the table, and for an instant the pointer was over neither. `TableNode` is now a wrapper `div` that holds the hover, with the table and, while the toolbar is shown, an invisible strip (`h-5`, 20 px) above the table's top edge: about half the toolbar's height, so it covers the gap and the lower half of the toolbar. It is outside the table box (the table clips its content) but inside the wrapper, so the pointer over it counts as over the table. The e2e test moves the pointer from the header to the toolbar 40 steps and checks the toolbar is visible at each; without the strip it fails. A double-click on the 20 px strip above a hovered or selected table no longer reaches the canvas, so it doesn't make a table there.
