@@ -9,11 +9,11 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, type MouseEvent } from 'react';
 import { layoutStore, useLayoutStore } from '@/stores/layout';
 import { useDerived } from '@/stores/derived';
 import { useSchemaStore } from '@/stores/schema';
-import { useUiStore } from '@/stores/ui';
+import { uiStore, useUiStore } from '@/stores/ui';
 import {
   CompactNode,
   isCompactZoom,
@@ -22,6 +22,7 @@ import {
 import { foreignKeyEdges, foreignKeyStubs, type StubNodeType } from './edges';
 import { FkEdge, FkMarkers } from './FkEdge';
 import { tableViews, unionOf } from './model-view';
+import { createTableAt } from './new-table';
 import { StubNode } from './StubNode';
 import { TableNode, type TableNodeType } from './TableNode';
 import { useAutoLayout } from './use-auto-layout';
@@ -55,7 +56,7 @@ export function Canvas() {
 }
 
 function CanvasContent() {
-  const { fitView } = useReactFlow();
+  const { fitView, screenToFlowPosition } = useReactFlow();
   // true or false, so the canvas redraws when the tables change form, not while zooming
   const compact = useStore((s) => isCompactZoom(s.transform[2]));
   const baseline = useSchemaStore((s) => s.baseline);
@@ -113,6 +114,17 @@ function CanvasContent() {
     },
     [fitView],
   );
+  // a new table where the empty canvas was double-clicked
+  const onDoubleClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const target = event.target as HTMLElement;
+      if (compact || !target.classList.contains('react-flow__pane')) return;
+      createTableAt(
+        screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+      );
+    },
+    [compact, screenToFlowPosition],
+  );
   return (
     <div data-layout={status} className="h-full w-full">
       <ReactFlow
@@ -124,6 +136,10 @@ function CanvasContent() {
         nodesDraggable
         // a table is deleted from its toolbar; the key must never do it, least of all while typing
         deleteKeyCode={null}
+        zoomOnDoubleClick={false}
+        onDoubleClick={onDoubleClick}
+        // a popover left open is closed by a click on the empty canvas
+        onPaneClick={() => uiStore.getState().cancelEditing()}
         onNodesChange={onNodesChange}
         onNodeClick={onNodeClick}
         fitView

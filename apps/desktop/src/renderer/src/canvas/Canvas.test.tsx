@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { act } from 'react';
 import ELK from 'elkjs/lib/elk.bundled.js';
 import { afterEach, describe, expect, test, vi } from 'vitest';
@@ -27,6 +27,7 @@ const load = async (model = fixtureModel) => {
 
 afterEach(async () => {
   act(() => uiStore.getState().showAllSchemas());
+  act(() => uiStore.setState({ editing: null, notice: null }));
   saved.positions = {};
   await load(emptyModel());
 });
@@ -187,6 +188,35 @@ describe('Canvas', () => {
     expect(place()).toBeUndefined();
     act(() => uiStore.getState().toggleSchema('s:1'));
     expect(place()).toMatch(/translate\(900px,\s*700px\)/);
+  });
+
+  test('a double-click on the empty canvas makes a table, and one on a table does not', async () => {
+    await load();
+    const { container } = render(
+      <div style={{ width: 800, height: 600 }}>
+        <Canvas />
+      </div>,
+    );
+    const pane = container.querySelector('.react-flow__pane')!;
+    fireEvent.doubleClick(pane, { clientX: 50, clientY: 60 });
+    expect(nodes(container)).toHaveLength(4);
+    expect(tableNames()).toContain('public.new_table');
+    expect(uiStore.getState().editing).toMatch(/:name$/);
+
+    fireEvent.doubleClick(nodes(container)[0]!);
+    expect(nodes(container)).toHaveLength(4);
+  });
+
+  test('a click on the empty canvas closes whatever editor is open', async () => {
+    await load();
+    const { container } = render(
+      <div style={{ width: 800, height: 600 }}>
+        <Canvas />
+      </div>,
+    );
+    act(() => uiStore.getState().startEditing('c:20:2:type'));
+    fireEvent.click(container.querySelector('.react-flow__pane')!);
+    expect(uiStore.getState().editing).toBeNull();
   });
 
   test('every node has its own position, so no two tables are drawn on top of each other', async () => {
