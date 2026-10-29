@@ -899,4 +899,36 @@ Across about a dozen full runs, some pass whole (26 of 26) and others lose one t
 
 **The type picker stayed open when the empty canvas was clicked.** The click reached the page but the popover didn't close for it (it did for a click on the bar above the canvas; React Flow's pane is the odd one out). The picker's open state is now the UI store's `editing` (key `<column id>:type`), the "open popover" the plan lists there, instead of its own state, and `Canvas` ends any open edit on a pane click (`cancelEditing`). One side effect: opening the picker ends an inline name edit that is open, which commits it first as its input loses focus.
 
-**The toolbar went away on the way up to it.** The toolbar floats 4 px above the table, and for an instant the pointer was over neither. `TableNode` is now a wrapper `div` that holds the hover, with the table and, while the toolbar is shown, an invisible strip (`h-5`, 20 px) above the table's top edge: about half the toolbar's height, so it covers the gap and the lower half of the toolbar. It is outside the table box (the table clips its content) but inside the wrapper, so the pointer over it counts as over the table. The e2e test moves the pointer from the header to the toolbar 40 steps and checks the toolbar is visible at each; without the strip it fails. A double-click on the 20 px strip above a hovered or selected table no longer reaches the canvas, so it doesn't make a table there.
+**The toolbar went away on the way up to it.** The toolbar floats 4 px above the table, and for an instant the pointer was over neither. `TableNode` is now a wrapper `div` that holds the hover, with the table and, while the toolbar is shown, an invisible strip above the table's top edge (`h-14`, 56 px, widened by hand from the first `h-5`), which covers the gap and the toolbar. It is outside the table box (the table clips its content) but inside the wrapper, so the pointer over it counts as over the table. The e2e test moves the pointer from the header to the toolbar 40 steps and checks the toolbar is visible at each; without the strip it fails. A double-click on the strip above a hovered or selected table no longer reaches the canvas, so it doesn't make a table there.
+
+## Schema picker for new tables (M7)
+
+**Date & time:** 2026-10-29 19:10
+
+For a table the migration creates, the schema before the dot in the header is a menu (`editors/SchemaPicker.tsx`, a shadcn `DropdownMenu`): the schemas as radio items, the current one ticked, and "New schema…". That makes a pending schema, moves the table into it and opens its name to type, in its row of the menu, which stays open. A table that is in the database shows its schema as plain text, as before. `TableView` has `schemaId`.
+
+Both this menu and the Schemas filter put a pen and a trash can at the end of the row of each schema the migration creates (`editors/SchemaRowActions.tsx`; a schema in the database has neither, since renaming and dropping those waits for 0.2). The pen turns the name into an input in the row (the existing `InlineText`); the trash can deletes the schema, or, if a table is in it, says so in the notice bar and deletes nothing. Neither icon also chooses or ticks the row. The store has `renameSchema` and `removeSchema`, both for schemas the migration creates only; deleting also removes it from the diff, so the migration no longer creates it. Both menus take their list of schemas from `hooks/use-schemas.ts`.
+
+While a name is being typed in a menu, the input is not a menu item, its keys don't reach the menu (no typeahead, no Enter or Space choosing an item), and the other items stop the menu from moving the focus: a Radix menu focuses the item under the pointer, and the menu itself when the pointer leaves an item, which took the focus from the input (the e2e test showed it) until the items were given a handler that prevents it (`whileRenaming`). Esc in the input gives up the rename and, as it is Esc, closes the menu too.
+
+**Rationale:** the plan's M7 says "New schema…" creates a pending schema, and says nothing about naming it. A schema that could only be called `new_schema` would be of little use, so the name opens as soon as it is made.
+
+## Removed objects and their foreign keys (M8)
+
+**Date & time:** 2026-10-29 19:10
+
+A foreign key the change drops is drawn red, dashed and faded (`FkEdge`, from `data.removed`, which `foreignKeyEdges` sets from the set of removed ids that `Canvas` takes from the status map). Deleting a table marks the keys it has, and the keys other tables have to it, as removed, since the diff drops both; restoring the table brings both back. A click on a removed column's row brings it back; a click on the header of a removed table brings the table back, and so does a click on a row of a removed table, since a column can't be there without its table. The `⋯` menu's "Restore column" does the same for the keyboard; the menu stops the click so the row doesn't restore it a second time. The hover text of a removed object says "click to restore".
+
+A removed foreign key can't be restored on its own by clicking its line: that comes with the foreign key popover (M12).
+
+**Rationale:** the plan's "Removed: red, struck through, faded; click to restore" and its M8 test, deleting a referenced table. The e2e test deletes `users` from the fixture and expects two removed lines (its own to itself and invoices' key to it), the third staying, and none after a restore.
+
+## Normalizer service and `expr.normalize` (M9)
+
+**Date & time:** 2026-10-29 19:10
+
+`services/normalizer.ts` (`createNormalizer`) answers `expr.normalize` requests on one task connection, opened by the first request and kept for the next, and closed after 30 s with none (`IDLE_MS`; a request in progress holds it open, and a request restarts the 30 s). Requests queue on the connection (`exclusive`), and `normalizeExpression` from core runs each in its own `BEGIN … ROLLBACK` on a temporary copy of the table, so it needs no transaction from the task connection (which would nest). A connection that fails to open is not kept, and one that breaks (`onLost`) is dropped, so the next request opens a new one. The normalizer is part of the open session (`ActiveSession.normalizer`): it is made when a database is opened, and closed when the session is replaced, closed or lost. `IpcDeps` has `openTask` (the way task connections are opened) for tests. `ipc/expr.ts` is the channel: it needs an open database, and the input is checked by the contract's schema before anything runs.
+
+The answer is core's: `normalized` with the text (and, for a check, the columns it uses in the order Postgres stores them), `invalid` with Postgres' own message, or `raw` with the text as typed when the role can't create temporary tables or the session is read-only. Core now exports `quoteIdent` and `quoteLiteral` (the DB test needed them).
+
+**Rationale:** the plan's "one reused task connection per window (closed after 30 s idle)". Tying it to the session means Disconnect closes it at once instead of leaving a connection for 30 s. The DB test (Postgres 14, 16 and 18) covers a default, a check's columns, an error, six requests at once on one connection, the idle close and a role without TEMP; unit tests cover the sharing, queueing, timer and failure cases; an e2e test calls the channel through the preload bridge and sees two backends.
