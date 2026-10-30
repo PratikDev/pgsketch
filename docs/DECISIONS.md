@@ -985,3 +985,33 @@ A line can be dragged from the edge of one row to the edge of another, in any ta
 A click on a line opens `editors/FkPopover.tsx` where it was clicked: the key (`invoices.user_id → users.id`), what happens on delete and on update (shadcn `Select`: no action, restrict, cascade, set null, set default), and Remove. For a key the change drops it offers Restore instead (which M8 left for here), and for a read-only key it says why and offers nothing. Changing the action of a key that is in the database is a drop and an add in the diff (two changes), which the e2e test checks. Its open state is `editing` = `<key id>:fk` again, with the position of the click kept by the canvas.
 
 **Rationale:** the plan's M12, with the validation done on the new key instead of leaving an invalid one that no node shows until M17.
+
+## The node footer, and the index and check editors (M13, M14)
+
+**Date & time:** 2026-10-30 18:20
+
+Every table has a bar at its foot (`canvas/NodeFooter.tsx`, `FOOTER_HEIGHT` 28 px, counted in `nodeHeight`): "2 indexes · 1 check", and, to the right, what depends on the table and pgsketch doesn't edit ("1 view", names on hover; sequences are left out, since an identity or serial column has its own). A click opens it into two lists, Indexes and Constraints, with "+ Index" and "+ Check" under them; opening it is local to the node, and an index or check being added opens it and leaves it open. The toolbar has Add index and Add check too, which open the same editors. The lists show state like rows do (green, amber, struck through, red outline, lock), a removed one comes back by a click, and the name of an index or constraint is renamed in place (which stops its name following its table and columns).
+
+`IndexEditor` picks columns in the order they are clicked (each shows its place; clicking again takes it out) and has a Unique box; its name is the one `assignNames` gives (`invoices_total_user_id_idx`). `CheckEditor` is an `ExpressionInput` whose answer carries the columns the check uses, and "Add check" is on once Postgres has read it; the name follows the columns (`line_items_check` for several, `line_items_label_check` for one). When the role can't create temporary tables (the fallback flag from M10) it says so instead of showing an input, and adds nothing.
+
+The footer lists checks and every constraint that is read-only (an exclusion constraint, a deferrable key), but not primary keys, unique constraints or foreign keys, which the rows and lines already show. `ExpressionInput`'s `onAnswer` now gets `null` the moment the text changes, so an editor can never add an answer that belongs to older text (the default popover had the same gap).
+
+**Rationale:** the plan's "N indexes · M checks, expands inline" and its M13 and M14 tests. The layout is made once, so a footer opened into lists makes the node taller than it was laid out for; it can then overlap the table under it until the next arrange.
+
+## Comments (M15)
+
+**Date & time:** 2026-10-30 18:20
+
+A table's comment is edited from its toolbar, a column's from `⋯` → Comment…; both open `editors/CommentPopover.tsx`, a textarea over the header or the row (UI store `editing` = `<id>:comment`). Saving nothing removes the comment. An object with a comment shows a small speech bubble on its header or row, with the text on hover and a click to open it. The store has `setTableComment`. The popover from the row menu opens when the menu has let go of the focus (`onCloseAutoFocus`): opened sooner, the menu took the focus back and closed it at once, which the e2e test showed.
+
+**Rationale:** the plan's M15; the e2e test checks a column's and a table's comment each count as one change and that saving nothing puts the count back.
+
+## Read-only objects and errors on nodes (M16, M17)
+
+**Date & time:** 2026-10-30 18:20
+
+What pgsketch doesn't edit has a lock (`LockIcon`) and the reason on hover, as the table and column had since L8, and now the footer lists too: a read-only index (hover also has its definition from Postgres) or constraint has a lock, its name is text, and it has no delete. Whatever depends on a table is counted in the footer. The e2e test uses a second server with a table of a generated column and an exclusion constraint, and the fixture's partial index and view.
+
+An error on an index or a constraint of a table is an error on the table too: its node is outlined (`aria-invalid`) with the message on hover, and the entry in the footer that has it is outlined too. The e2e test names a new index `invoices`, which clashes with the table of that name in the same schema, and sees both; renaming it again takes them away.
+
+**Rationale:** the plan's M16 and M17. Putting a child's error on the table means a collapsed footer can't hide it.

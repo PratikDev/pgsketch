@@ -820,11 +820,11 @@ J7 changes four files, and deletes the old `connect-form.ts` and `TextField.tsx`
 | M10 | Expression input with live normalization | `editors/ExpressionInput.tsx` | Component test with mocked API shows errors inline; one request 400 ms after typing stops; cached results aren't requested again | done |
 | M11 | Default popover: presets per type, constant, custom; disabled on identity columns | `editors/DefaultPopover.tsx`, `canvas/ColumnRow.tsx` | E2E: choose `now()` on a `timestamptz` column; the chip can't be opened on an identity column | done |
 | M12 | FK by dragging between handles, including onto the same table; FK edge popover | `canvas/Canvas.tsx`, `editors/FkPopover.tsx` | E2E: drag creates an FK and a self-reference; changing `ON DELETE` yields drop + add | done |
-| M13 | Node footer with index editor | `canvas/NodeFooter.tsx`, `editors/IndexEditor.tsx` | E2E: add a composite unique index; it's named `t_a_b_idx` | todo |
-| M14 | Check constraint editor | `editors/CheckEditor.tsx`, `canvas/NodeFooter.tsx` | E2E: invalid check expression shows the Postgres error; a two-column check is named `t_check`; in fallback mode the check editor is disabled with an explanation | todo |
-| M15 | Table and column comments | `editors/CommentPopover.tsx`, `canvas/TableToolbar.tsx`, `canvas/ColumnRow.tsx` | E2E: a column comment yields `setComment` | todo |
-| M16 | Read-only objects: lock icon with reason, no edit affordances; unmodeled-objects badge in the footer | `canvas/TableNode.tsx`, `canvas/NodeFooter.tsx` | E2E: a partial index, an exclusion constraint and a generated column can't be edited; a table with a view on it shows "1 view" with the name on hover | todo |
-| M17 | Validation errors shown on nodes | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: an index named like a table shows a red outline and message | todo |
+| M13 | Node footer with index editor | `canvas/NodeFooter.tsx`, `editors/IndexEditor.tsx` | E2E: add a composite unique index; it's named `t_a_b_idx` | done |
+| M14 | Check constraint editor | `editors/CheckEditor.tsx`, `canvas/NodeFooter.tsx` | E2E: invalid check expression shows the Postgres error; a two-column check is named `t_check`; in fallback mode the check editor is disabled with an explanation | done |
+| M15 | Table and column comments | `editors/CommentPopover.tsx`, `canvas/TableToolbar.tsx`, `canvas/ColumnRow.tsx` | E2E: a column comment yields `setComment` | done |
+| M16 | Read-only objects: lock icon with reason, no edit affordances; unmodeled-objects badge in the footer | `canvas/TableNode.tsx`, `canvas/NodeFooter.tsx` | E2E: a partial index, an exclusion constraint and a generated column can't be edited; a table with a view on it shows "1 view" with the name on hover | done |
+| M17 | Validation errors shown on nodes | `canvas/TableNode.tsx`, `canvas/ColumnRow.tsx` | E2E: an index named like a table shows a red outline and message | done |
 
 ### N. Persistence and change detection
 
