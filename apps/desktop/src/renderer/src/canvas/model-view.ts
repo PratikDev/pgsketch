@@ -5,6 +5,7 @@ import type {
   PgType,
   SchemaModel,
 } from '@pgsketch/core';
+import { footerOf, type FooterView } from './footer-view';
 import { stateOf, type ObjectState, type StateSources } from './object-state';
 
 /**
@@ -43,6 +44,7 @@ export type ColumnView = {
   default: string | null;
   /** The columns its foreign keys point at, like `users.id`. */
   references: string[];
+  comment: string | null;
   state: ObjectState;
 };
 
@@ -52,6 +54,8 @@ export type TableView = {
   schema: string;
   name: string;
   columns: ColumnView[];
+  comment: string | null;
+  footer: FooterView;
   state: ObjectState;
 };
 
@@ -110,21 +114,32 @@ export function tableViews(
       const target = i < 0 ? undefined : fk.refColumnIds[i];
       return target === undefined ? [] : [targetOf(model, schemaId, target)];
     }),
+    comment: column.comment,
     state: stateOf(column.id, column.readOnly, sources),
   });
 
   return Object.values(model.tables)
-    .map((table) => ({
-      id: table.id,
-      schemaId: table.schemaId,
-      schema: model.schemas[table.schemaId]?.name ?? '',
-      name: table.name,
-      state: stateOf(table.id, table.readOnly, sources),
-      columns: Object.values(model.columns)
-        .filter((c) => c.tableId === table.id)
-        .sort((a, b) => a.position - b.position)
-        .map((c) => columnView(c, table.schemaId)),
-    }))
+    .map((table) => {
+      const footer = footerOf(model, table.id, sources);
+      // an error on one of its indexes or constraints is an error on the table, which the footer then points at
+      const own = stateOf(table.id, table.readOnly, sources);
+      const inside = [...footer.indexes, ...footer.constraints].find(
+        (o) => o.state.error !== null,
+      );
+      return {
+        id: table.id,
+        schemaId: table.schemaId,
+        schema: model.schemas[table.schemaId]?.name ?? '',
+        name: table.name,
+        comment: table.comment,
+        footer,
+        state: { ...own, error: own.error ?? inside?.state.error ?? null },
+        columns: Object.values(model.columns)
+          .filter((c) => c.tableId === table.id)
+          .sort((a, b) => a.position - b.position)
+          .map((c) => columnView(c, table.schemaId)),
+      };
+    })
     .sort((a, b) =>
       `${a.schema}.${a.name}` < `${b.schema}.${b.name}` ? -1 : 1,
     );

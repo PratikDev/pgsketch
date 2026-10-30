@@ -17,6 +17,7 @@ const column = (over: Partial<ColumnView> = {}): ColumnView => ({
   unique: false,
   default: null,
   references: [],
+  comment: null,
   state: { status: null, error: null, readOnly: null },
   ...over,
 });

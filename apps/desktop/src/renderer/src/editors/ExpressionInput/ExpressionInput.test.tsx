@@ -125,6 +125,17 @@ describe('ExpressionInput', () => {
     expect(onAnswer).toHaveBeenCalledWith(answer);
   });
 
+  test('takes the answer back at once when the text changes, so an old one is never used', async () => {
+    const { onAnswer, input } = setup();
+    type(input, 'a');
+    await wait(400);
+    expect(onAnswer).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'normalized' }),
+    );
+    type(input, 'b');
+    expect(onAnswer).toHaveBeenLastCalledWith(null);
+  });
+
   test('an answer that was got before is not asked for again, nor waited for', async () => {
     const { asked, onAnswer, input } = setup();
     type(input, 'abc');
@@ -135,7 +146,8 @@ describe('ExpressionInput', () => {
     expect(asked()).toHaveLength(1);
     // from the cache at once, with no 400 ms
     expect(input).toHaveAttribute('aria-busy', 'false');
-    expect(onAnswer).toHaveBeenCalledTimes(2);
+    // the answer is taken back while the text is different, and given again from the cache
+    expect(onAnswer.mock.calls.filter(([a]) => a !== null)).toHaveLength(2);
     await wait(1000);
     expect(asked()).toHaveLength(1);
   });

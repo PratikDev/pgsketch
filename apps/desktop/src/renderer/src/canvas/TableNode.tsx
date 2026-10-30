@@ -1,3 +1,4 @@
+import { CommentMark, CommentPopover } from '@/editors/CommentPopover';
 import { InlineText } from '@/editors/InlineText';
 import { SchemaPicker } from '@/editors/SchemaPicker';
 import { HEADER_HEIGHT, NODE_WIDTH, PADDING } from '@/layout/autoLayout';
@@ -7,6 +8,7 @@ import type { Node, NodeProps } from '@xyflow/react';
 import { LockIcon } from 'lucide-react';
 import { useState } from 'react';
 import { ColumnRow } from './ColumnRow';
+import { NodeFooter } from './NodeFooter';
 import type { TableView } from './model-view';
 import { isEditable, stateClasses, stateTitle } from './object-state';
 import { TableToolbar } from './TableToolbar';
@@ -54,7 +56,7 @@ export function TableNode({ data, selected }: NodeProps<TableNodeType>) {
               : undefined
           }
           className={cn(
-            'flex items-center truncate border-b border-border px-3 font-medium',
+            'relative flex items-center truncate border-b border-border px-3 font-medium',
             removed && 'cursor-pointer',
           )}
         >
@@ -68,12 +70,22 @@ export function TableNode({ data, selected }: NodeProps<TableNodeType>) {
               schemaStore.getState().renameTable(data.id, name)
             }
           />
-          {data.state.readOnly && (
-            <LockIcon
-              aria-label="Read-only"
-              className="ml-auto size-4 shrink-0"
-            />
-          )}
+          <span className="ml-auto flex shrink-0 items-center gap-1">
+            {data.comment !== null && (
+              <CommentMark id={data.id} comment={data.comment} />
+            )}
+            {data.state.readOnly && (
+              <LockIcon aria-label="Read-only" className="size-4" />
+            )}
+          </span>
+          <CommentPopover
+            id={data.id}
+            label={`${data.schema}.${data.name}`}
+            comment={data.comment}
+            onSave={(comment) =>
+              schemaStore.getState().setTableComment(data.id, comment)
+            }
+          />
         </header>
         <ul style={{ padding: PADDING / 2 }}>
           {data.columns.map((column, i) => (
@@ -84,6 +96,7 @@ export function TableNode({ data, selected }: NodeProps<TableNodeType>) {
             />
           ))}
         </ul>
+        <NodeFooter table={data} />
       </section>
     </div>
   );

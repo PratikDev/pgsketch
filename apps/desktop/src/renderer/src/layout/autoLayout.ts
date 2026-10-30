@@ -12,8 +12,10 @@ export const NODE_WIDTH = 360;
 export const HEADER_HEIGHT = 40;
 export const ROW_HEIGHT = 28;
 export const PADDING = 8;
+/** The bar under the rows; what it opens into is not counted, since the layout is made once. */
+export const FOOTER_HEIGHT = 28;
 export const nodeHeight = (columns: number): number =>
-  HEADER_HEIGHT + columns * ROW_HEIGHT + PADDING;
+  HEADER_HEIGHT + columns * ROW_HEIGHT + PADDING + FOOTER_HEIGHT;
 const rowCenter = (index: number): number =>
   HEADER_HEIGHT + index * ROW_HEIGHT + ROW_HEIGHT / 2;
 

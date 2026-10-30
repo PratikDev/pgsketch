@@ -25,7 +25,7 @@ export function ExpressionInput({
   onChange: (text: string) => void;
   target: ExpressionTarget;
   columns: ExpressionColumn[];
-  onAnswer?: (answer: NormalizedExpression) => void;
+  onAnswer?: (answer: NormalizedExpression | null) => void;
   placeholder?: string;
 }) {
   const state = useNormalizedExpression(

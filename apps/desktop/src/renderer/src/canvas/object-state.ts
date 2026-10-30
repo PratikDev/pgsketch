@@ -1,4 +1,9 @@
-import type { Id, ReadOnlyReason, ValidationError } from '@pgsketch/core';
+import type {
+  Id,
+  ReadOnlyReason,
+  SchemaModel,
+  ValidationError,
+} from '@pgsketch/core';
 import { cn } from '@/lib/utils';
 import type { ObjectStatus, OldValues, StatusMap } from './status';
 
@@ -14,6 +19,8 @@ export interface ObjectState {
 export interface StateSources {
   statuses: StatusMap;
   errors: ValidationError[];
+  /** The edited schema with the names the database would give new constraints and indexes. */
+  named?: SchemaModel;
 }
 
 export function stateOf(

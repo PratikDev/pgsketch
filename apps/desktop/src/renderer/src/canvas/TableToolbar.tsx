@@ -1,8 +1,17 @@
 import { NodeToolbar, Position } from '@xyflow/react';
-import { PlusIcon, RotateCcwIcon, Trash2Icon } from 'lucide-react';
+import {
+  ListPlusIcon,
+  MessageSquareIcon,
+  PlusIcon,
+  RotateCcwIcon,
+  ShieldCheckIcon,
+  Trash2Icon,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { showRefusal } from '@/lib/refusal';
+import { commentKey } from '@/editors/CommentPopover';
 import { schemaStore } from '@/stores/schema';
+import { uiStore } from '@/stores/ui';
 import { addColumnAndEdit } from './column-actions';
 import type { TableView } from './model-view';
 import { isEditable } from './object-state';
@@ -44,6 +53,39 @@ export function TableToolbar({
               onClick={() => addColumnAndEdit(table.id)}
             >
               <PlusIcon />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Add index"
+              title="Add index"
+              onClick={() =>
+                uiStore.getState().startEditing(`${table.id}:index`)
+              }
+            >
+              <ListPlusIcon />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Add check"
+              title="Add check"
+              onClick={() =>
+                uiStore.getState().startEditing(`${table.id}:check`)
+              }
+            >
+              <ShieldCheckIcon />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Comment"
+              title="Comment"
+              onClick={() =>
+                uiStore.getState().startEditing(commentKey(table.id))
+              }
+            >
+              <MessageSquareIcon />
             </Button>
             <Button
               variant="ghost"

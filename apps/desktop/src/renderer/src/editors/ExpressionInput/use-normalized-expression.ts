@@ -20,11 +20,13 @@ export type ExpressionState =
 
 /**
  * Asks the open database for the canonical form of the expression 400 ms after the last change,
- * and calls `onAnswer` with each answer, a cached one included. The same request is not asked twice.
+ * and calls `onAnswer` with each answer, a cached one included, and with `null` as soon as the
+ * text changes, since the answer it had belongs to the text before. The same request is not asked
+ * twice.
  */
 export function useNormalizedExpression(
   request: NormalizeRequest,
-  onAnswer?: (answer: NormalizedExpression) => void,
+  onAnswer?: (answer: NormalizedExpression | null) => void,
 ): ExpressionState {
   const [state, setState] = useState<ExpressionState>({ status: 'idle' });
   const latest = useRef(onAnswer);
@@ -36,6 +38,7 @@ export function useNormalizedExpression(
       setState({ status: 'done', answer });
       latest.current?.(answer);
     };
+    latest.current?.(null);
     if (request.expression.trim() === '') {
       setState({ status: 'idle' });
       return;

@@ -16,7 +16,7 @@ import { schemaStore, useSchemaStore } from '@/stores/schema';
 import { uiStore, useUiStore } from '@/stores/ui';
 import { applyDefault } from './apply-default';
 import { constantExpression, presetsFor } from './presets';
-import { useTableColumns } from './use-table-columns';
+import { useTableColumns } from '@/hooks/use-table-columns';
 
 // the default keeps room to be read and clicked: the type gives way before it does
 const chip = 'min-w-14 shrink justify-start truncate';

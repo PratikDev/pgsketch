@@ -75,10 +75,10 @@ function CanvasContent() {
   const baseline = useSchemaStore((s) => s.baseline);
   const desired = useSchemaStore((s) => s.desired);
   const model = useMemo(() => unionOf(baseline, desired), [baseline, desired]);
-  const { statuses, errors } = useDerived();
+  const { statuses, errors, named } = useDerived();
   const views = useMemo(
-    () => tableViews(model, { statuses, errors }),
-    [model, statuses, errors],
+    () => tableViews(model, { statuses, errors, named }),
+    [model, statuses, errors, named],
   );
   const status = useAutoLayout(model, views);
   const positions = useLayoutStore((s) => s.positions);

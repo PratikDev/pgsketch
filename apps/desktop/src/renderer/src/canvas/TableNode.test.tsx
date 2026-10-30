@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { describe, expect, test } from 'vitest';
 import {
+  FOOTER_HEIGHT,
   HEADER_HEIGHT,
   NODE_WIDTH,
   nodeHeight,
@@ -86,9 +87,9 @@ describe('TableNode', () => {
     // header, rows and the padding around them add up to the height the layout assumes
     const padding =
       Number.parseFloat(rows[0]!.parentElement!.style.padding) * 2;
-    expect(HEADER_HEIGHT + rows.length * ROW_HEIGHT + padding).toBe(
-      nodeHeight(rows.length),
-    );
+    expect(
+      HEADER_HEIGHT + rows.length * ROW_HEIGHT + padding + FOOTER_HEIGHT,
+    ).toBe(nodeHeight(rows.length));
   });
 
   describe('status', () => {
