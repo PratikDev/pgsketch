@@ -3,13 +3,25 @@ import {
   Controls,
   ReactFlow,
   ReactFlowProvider,
+  ConnectionMode,
   useReactFlow,
   useStore,
+  type Connection,
+  type EdgeMouseHandler,
   type NodeChange,
+  type OnConnectStart,
   type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { useCallback, useEffect, useMemo, type MouseEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from 'react';
+import { FkPopover } from '@/editors/FkPopover';
 import { layoutStore, useLayoutStore } from '@/stores/layout';
 import { useDerived } from '@/stores/derived';
 import { useSchemaStore } from '@/stores/schema';
@@ -19,6 +31,7 @@ import {
   isCompactZoom,
   type CompactNodeType,
 } from './CompactNode';
+import { connectColumns, columnOfHandle } from './connect';
 import { foreignKeyEdges, foreignKeyStubs, type StubNodeType } from './edges';
 import { FkEdge, FkMarkers } from './FkEdge';
 import { tableViews, unionOf } from './model-view';
@@ -126,6 +139,29 @@ function CanvasContent() {
     },
     [fitView],
   );
+  // a click on a foreign key line opens what can be done to it, where it was clicked
+  const [fkAnchor, setFkAnchor] = useState({ x: 0, y: 0 });
+  const onEdgeClick = useCallback<EdgeMouseHandler>((event, edge) => {
+    if (edge.id.startsWith('stub:')) return;
+    setFkAnchor({ x: event.clientX, y: event.clientY });
+    uiStore.getState().startEditing(`${edge.id}:fk`);
+  }, []);
+  // A line is dragged from the handle where it starts to the one where it ends. Which of the two
+  // ends React Flow calls the source depends on the kind of handle it was started from, so the
+  // column it was started from is kept, and that is the one that gets the key.
+  const dragStart = useRef<string | null>(null);
+  const onConnectStart = useCallback<OnConnectStart>((_, { handleId }) => {
+    dragStart.current = columnOfHandle(handleId);
+  }, []);
+  const onConnect = useCallback((connection: Connection) => {
+    const ends = [
+      columnOfHandle(connection.sourceHandle),
+      columnOfHandle(connection.targetHandle),
+    ];
+    const from = dragStart.current ?? ends[0];
+    const to = ends[0] === from ? ends[1] : ends[0];
+    if (from && to) connectColumns(from, to);
+  }, []);
   // a new table where the empty canvas was double-clicked
   const onDoubleClick = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -144,7 +180,12 @@ function CanvasContent() {
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        nodesConnectable={false}
+        // a line from any handle to any other: which side or end it starts at is worked out afterwards
+        nodesConnectable
+        connectionMode={ConnectionMode.Loose}
+        onConnectStart={onConnectStart}
+        onConnect={onConnect}
+        onEdgeClick={onEdgeClick}
         nodesDraggable
         // a table is deleted from its toolbar; the key must never do it, least of all while typing
         deleteKeyCode={null}
@@ -158,6 +199,7 @@ function CanvasContent() {
         minZoom={0.1}
       >
         <FkMarkers />
+        <FkPopover anchor={fkAnchor} />
         <FitWhenLaidOut laidOut={status === 'ready'} />
         <Background />
         <Controls showInteractive={false} />
