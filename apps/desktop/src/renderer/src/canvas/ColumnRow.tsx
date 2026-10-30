@@ -5,6 +5,7 @@ import { ROW_HEIGHT } from '@/layout/autoLayout';
 import { cn } from '@/lib/utils';
 import { handleId } from './edges';
 import type { ColumnView } from './model-view';
+import { DefaultPopover } from '@/editors/DefaultPopover';
 import { InlineText } from '@/editors/InlineText';
 import { TypePicker } from '@/editors/TypePicker';
 import { schemaStore } from '@/stores/schema';
@@ -67,16 +68,14 @@ export function ColumnRow({
         className="text-muted-foreground"
       />
       {/* the chips give up room first, so the name, the type and the switches stay readable */}
-      <span className="flex min-w-0 shrink-3 items-center gap-1">
-        {column.default !== null && (
-          <Badge
-            variant="outline"
-            title={`Default: ${column.default}`}
-            className="min-w-0 shrink justify-start truncate"
-          >
-            = {column.default}
-          </Badge>
+      <span
+        className={cn(
+          'flex min-w-0 shrink-3 items-center gap-1',
+          // a default keeps room to be read and clicked; the type gives way before it does
+          column.default !== null && 'min-w-14',
         )}
+      >
+        <DefaultPopover column={column} editable={editable} />
         {column.references.map((target) => (
           <Badge
             key={target}
@@ -95,7 +94,7 @@ export function ColumnRow({
         <KeyBadges column={column} editable={editable} />
         {!column.state.readOnly && <RowMenu column={column} />}
       </span>
-      {/* the four ends a foreign key line can have on this row: either side, starting or ending */}
+      {/* the four ends a foreign key line can have on this row: either side, starting or ending; a line is drawn from one to the handle of another row */}
       {(['left', 'right'] as const).flatMap((side) =>
         (['source', 'target'] as const).map((role) => (
           <Handle
@@ -103,7 +102,8 @@ export function ColumnRow({
             id={handleId(column.id, side, role)}
             type={role}
             position={side === 'left' ? Position.Left : Position.Right}
-            isConnectable={false}
+            // a read-only column can still be pointed at; a removed one can't be, nor start a line
+            isConnectable={!removed}
             className="size-2! border-border! bg-muted-foreground!"
           />
         )),

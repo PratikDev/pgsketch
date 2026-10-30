@@ -8,7 +8,7 @@ export type Point = { x: number; y: number };
  * these heights (long text is cut short), so the layout can leave room for them without having
  * to wait until they are on the page and measured.
  */
-export const NODE_WIDTH = 300;
+export const NODE_WIDTH = 360;
 export const HEADER_HEIGHT = 40;
 export const ROW_HEIGHT = 28;
 export const PADDING = 8;
