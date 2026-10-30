@@ -1,7 +1,7 @@
-import { useState } from 'react';
 import { api } from '@/api';
 import { Connect } from '@/screens/Connect';
 import { Editor } from '@/screens/Editor';
+import { useState } from 'react';
 import type { SessionInfo } from '../../shared/ipc-contract';
 
 function App(): React.JSX.Element {
@@ -12,7 +12,7 @@ function App(): React.JSX.Element {
     <Editor
       session={session}
       onDisconnect={() => {
-        void api.connection.close().finally(() => setSession(null));
+        api.connection.close().finally(() => setSession(null));
       }}
     />
   );
