@@ -1157,6 +1157,105 @@ test("when the role can't create temporary tables, the first default says so, an
   }
 });
 
+test('edits survive a restart of the app', async () => {
+  const first = await launchApp();
+  await connectThroughForm(first.window, server, E2E_PASSWORD);
+  await expect(first.window.locator('[data-layout="ready"]')).toHaveCount(1);
+  await showTable(first.window, 'billing.line_items');
+  const label = rowOf(first.window, 'billing.line_items', 'label');
+  await label.getByRole('button', { name: 'label', exact: true }).click();
+  await first.window.keyboard.type('title');
+  await first.window.keyboard.press('Tab');
+  await expect(
+    first.window.getByText('1 change', { exact: true }),
+  ).toBeVisible();
+  // saved a second after the last edit
+  await first.window.waitForTimeout(1_500);
+  await first.app.close();
+
+  const second = await launchApp(first.dataDir);
+  await connectThroughForm(second.window, server, E2E_PASSWORD);
+  await expect(second.window.locator('[data-layout="ready"]')).toHaveCount(1);
+  await expect(
+    second.window.getByText('1 change', { exact: true }),
+  ).toBeVisible();
+  await showTable(second.window, 'billing.line_items');
+  const title = rowOf(second.window, 'billing.line_items', 'title');
+  await expect(title).toHaveAttribute('data-status', 'modified');
+  await expect(title).toHaveAttribute('title', 'Was: name label');
+  await expect(second.window.locator('[data-sonner-toast]')).toHaveCount(0);
+
+  // undone, nothing is left to restore
+  await title.getByRole('button', { name: 'title', exact: true }).click();
+  await second.window.keyboard.type('label');
+  await second.window.keyboard.press('Tab');
+  await expect(
+    second.window.getByText('0 changes', { exact: true }),
+  ).toBeVisible();
+  await second.window.waitForTimeout(1_500);
+  await second.app.close();
+  const third = await launchApp(first.dataDir);
+  await connectThroughForm(third.window, server, E2E_PASSWORD);
+  await expect(
+    third.window.getByText('0 changes', { exact: true }),
+  ).toBeVisible();
+  await third.app.close();
+});
+
+test('edits made on a database that was dropped and made again while the app was closed are not restored', async () => {
+  test.setTimeout(120_000);
+  const extra = await startE2eServer();
+  try {
+    await extra.admin.query(
+      'CREATE TABLE public.scratch (id integer PRIMARY KEY, name text)',
+    );
+    const first = await launchApp();
+    await connectThroughForm(first.window, extra, E2E_PASSWORD);
+    await expect(first.window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await showTable(first.window, 'public.scratch');
+    await rowOf(first.window, 'public.scratch', 'name')
+      .getByRole('button', { name: 'name', exact: true })
+      .click();
+    await first.window.keyboard.type('title');
+    await first.window.keyboard.press('Tab');
+    await expect(
+      first.window.getByText('1 change', { exact: true }),
+    ).toBeVisible();
+    await first.window.waitForTimeout(1_500);
+    await first.app.close();
+
+    // as a dump and a restore leave it: the same tables, with other OIDs
+    await extra.admin.query('DROP TABLE public.scratch');
+    await extra.admin.query(
+      'CREATE TABLE public.scratch (id integer PRIMARY KEY, name text)',
+    );
+
+    const second = await launchApp(first.dataDir);
+    await connectThroughForm(second.window, extra, E2E_PASSWORD);
+    await expect(second.window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await expect(second.window.locator('[data-sonner-toast]')).toContainText(
+      'not restored',
+    );
+    await expect(
+      second.window.getByText('0 changes', { exact: true }),
+    ).toBeVisible();
+    await showTable(second.window, 'public.scratch');
+    await expect(
+      rowOf(second.window, 'public.scratch', 'name'),
+    ).not.toHaveAttribute('data-status');
+    await second.app.close();
+
+    // and it was thrown away, not kept for next time
+    const third = await launchApp(first.dataDir);
+    await connectThroughForm(third.window, extra, E2E_PASSWORD);
+    await expect(third.window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await expect(third.window.locator('[data-sonner-toast]')).toHaveCount(0);
+    await third.app.close();
+  } finally {
+    await extra.stop();
+  }
+});
+
 test('a new table goes in the one schema the filter leaves showing', async () => {
   const { app, window } = await openEditor();
   await window.getByRole('button', { name: /^Schemas/ }).click();
