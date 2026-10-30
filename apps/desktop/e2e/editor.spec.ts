@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { TestServer } from '../test/postgres';
 import { launchApp } from './app';
 import { connectThroughForm } from './form';
@@ -715,6 +715,160 @@ test('what the editor refuses is said in a toast: a type an identity column cann
   // the same refusal again does not pile up a second toast
   await window.getByRole('option', { name: 'text', exact: true }).click();
   await expect(toast).toHaveCount(1);
+  await app.close();
+});
+
+test('a default is chosen from the presets of its type, and an identity column has no chip', async () => {
+  const { app, window } = await openEditor('public.users');
+  const row = rowOf(window, 'public.users', 'created_at'); // timestamptz DEFAULT now()
+  await expect(
+    row.getByRole('button', { name: /^Default: now\(\)/ }),
+  ).toHaveText('= now()');
+
+  // take it away, and the row is changed
+  await row.getByRole('button', { name: /^Default: now\(\)/ }).click();
+  await window.getByRole('button', { name: 'Remove default' }).click();
+  await expect(row).toHaveAttribute('data-status', 'modified');
+  await expect(row.getByRole('button', { name: /^Default/ })).toHaveCount(0);
+
+  // put it back with the preset: the same SQL as the database has, so nothing is changed
+  await row.hover();
+  await row.getByRole('button', { name: 'Add a default' }).click();
+  await window.getByRole('button', { name: 'now()' }).click();
+  await expect(
+    row.getByRole('button', { name: /^Default: now\(\)/ }),
+  ).toHaveText('= now()');
+  await expect(row).not.toHaveAttribute('data-status');
+  await expect(window.getByText('0 changes', { exact: true })).toBeVisible();
+
+  // an identity column has no default, and can't be given one
+  const id = rowOf(window, 'public.users', 'id');
+  await id.hover();
+  await expect(id.getByRole('button', { name: /default/i })).toHaveCount(0);
+
+  // a constant is quoted, and Postgres says how it reads it
+  const status = rowOf(window, 'public.users', 'status');
+  await status.getByRole('button', { name: /^Default/ }).click();
+  await window.getByRole('tab', { name: 'Constant' }).click();
+  await window.getByRole('textbox', { name: 'Constant' }).fill('banned');
+  await window.getByRole('button', { name: 'Set default' }).click();
+  await expect(status.getByRole('button', { name: /^Default/ })).toHaveText(
+    "= 'banned'::public.user_status",
+  );
+  await expect(status).toHaveAttribute('data-status', 'modified');
+
+  // an expression that Postgres rejects is said so in the popover, and nothing is set
+  await status.getByRole('button', { name: /^Default/ }).click();
+  await window.getByRole('tab', { name: 'Expression' }).click();
+  await window.getByRole('textbox', { name: 'Expression' }).fill('nonsense(');
+  await expect(window.getByRole('alert')).toContainText('syntax error', {
+    timeout: 5000,
+  });
+  await expect(
+    window.getByRole('button', { name: 'Set default' }),
+  ).toBeDisabled();
+  await app.close();
+});
+
+/** Drags from one row to another, as a pointer does: from the edge of the first to the edge of the second. */
+async function dragBetweenRows(window: Page, from: Locator, to: Locator) {
+  const a = (await from.boundingBox())!;
+  const b = (await to.boundingBox())!;
+  await window.mouse.move(a.x, a.y + a.height / 2);
+  await window.mouse.down();
+  await window.mouse.move(b.x, b.y + b.height / 2, { steps: 12 });
+  await window.mouse.up();
+}
+
+/** A point on a line, found on the line itself: the middle of its path, in screen coordinates. */
+const pointOnEdge = (window: Page, edge: string) =>
+  window.evaluate<{ x: number; y: number }>(`(() => {
+    const path = document.querySelector(${JSON.stringify(edge)}).querySelector('path.react-flow__edge-path');
+    const point = path.getPointAtLength(path.getTotalLength() / 2);
+    const m = path.getScreenCTM();
+    return { x: point.x * m.a + m.e, y: point.y * m.d + m.f };
+  })()`);
+
+test('dragging from one row to another makes a foreign key, to its own table too; what cannot be one is refused', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  const table = 'billing.line_items';
+  const edges = window.locator('.react-flow__edge');
+  await expect(edges).toHaveCount(3);
+
+  // invoice_id and id are both integers, and id is the key of its table: a key to itself
+  const rows = window
+    .getByRole('region', { name: table })
+    .getByRole('listitem');
+  const idRow = rows.first(); // a read-only column: its name is not a button
+  const invoiceId = rowOf(window, table, 'invoice_id');
+  await dragBetweenRows(window, invoiceId, idRow);
+  await expect(edges).toHaveCount(4);
+  await expect(
+    window.locator('.react-flow__edge g[data-self-reference="true"]'),
+  ).toHaveCount(2);
+  await expect(
+    invoiceId.getByTitle('Foreign key to line_items.id'),
+  ).toBeVisible();
+  await expect(window.getByText('1 change', { exact: true })).toBeVisible();
+
+  // a varchar can't point at an integer: nothing is made, and the reason is a toast
+  await dragBetweenRows(window, rowOf(window, table, 'label'), idRow);
+  await expect(window.locator('[data-sonner-toast]')).toContainText(
+    'types are incompatible',
+  );
+  await expect(edges).toHaveCount(4);
+  await expect(window.getByText('1 change', { exact: true })).toBeVisible();
+  await app.close();
+});
+
+test('dragging from a row of one table to a key of another makes a foreign key between them', async () => {
+  const { app, window } = await openEditor();
+  // the tables as they are laid out, at a zoom where they are full nodes
+  await window.getByRole('button', { name: 'fit view' }).click();
+  await window.waitForTimeout(400);
+  await window.getByRole('button', { name: 'zoom in' }).click();
+  await expect.poll(() => zoomOf(window)).toBeGreaterThanOrEqual(0.7);
+  const edges = window.locator('.react-flow__edge');
+  await expect(edges).toHaveCount(3);
+
+  const userId = rowOf(window, 'billing.invoices', 'user_id');
+  await dragBetweenRows(window, userId, rowOf(window, 'public.users', 'id'));
+  await expect(edges).toHaveCount(4);
+  await expect(userId.getByTitle('Foreign key to public.users.id')).toHaveCount(
+    2,
+  );
+  await expect(window.getByText('1 change', { exact: true })).toBeVisible();
+  await app.close();
+});
+
+test('a click on a foreign key line opens its popover: changing ON DELETE drops the key and adds it again', async () => {
+  const { app, window } = await openEditor();
+  const at = await pointOnEdge(
+    window,
+    '.react-flow__edge:has(g[data-self-reference="false"])',
+  );
+  await window.mouse.click(at.x, at.y);
+  await expect(window.getByText(/→ users|→ invoices/).first()).toBeVisible();
+  // (the fixture's key is ON DELETE CASCADE already)
+  await window.getByRole('combobox', { name: 'On delete' }).click();
+  await window.getByRole('option', { name: 'restrict' }).click();
+  // a key that is in the database is changed by dropping it and adding it back
+  await expect(window.getByText('2 changes', { exact: true })).toBeVisible();
+
+  // removing it from the popover marks it removed, and the popover then offers to restore it
+  await window.getByRole('button', { name: 'Remove foreign key' }).click();
+  await expect(
+    window.locator('.react-flow__edge g[data-removed="true"]'),
+  ).toHaveCount(1);
+  const where = await pointOnEdge(
+    window,
+    '.react-flow__edge:has(g[data-removed="true"])',
+  );
+  await window.mouse.click(where.x, where.y);
+  await window.getByRole('button', { name: 'Restore foreign key' }).click();
+  await expect(
+    window.locator('.react-flow__edge g[data-removed="true"]'),
+  ).toHaveCount(0);
   await app.close();
 });
 
