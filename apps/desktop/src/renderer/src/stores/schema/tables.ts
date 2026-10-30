@@ -7,6 +7,7 @@ export interface TablesSlice {
   /** A new table in a schema, with an `id bigint` identity primary key. Returns its id. */
   addTable: (schemaId: Id) => Id;
   renameTable: (tableId: Id, name: string) => void;
+  setTableComment: (tableId: Id, comment: string | null) => void;
   /**
    * Removes a table with its columns, constraints and indexes, and the foreign keys of other tables
    * that point at it. Returns why not, if something read-only still depends on it.
@@ -79,6 +80,12 @@ export const createTablesSlice: StateCreator<
     get().edit((d) => {
       const table = d.tables[tableId];
       if (table) table.name = name;
+    }),
+
+  setTableComment: (tableId, comment) =>
+    get().edit((d) => {
+      const table = d.tables[tableId];
+      if (table) table.comment = comment;
     }),
 
   removeTable: (tableId) => {

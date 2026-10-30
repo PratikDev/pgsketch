@@ -20,6 +20,22 @@ const opKinds = () =>
     .ops.map((o) => o.kind)
     .sort();
 
+describe('setTableComment', () => {
+  test('sets and clears the comment of a table, each as one setComment', () => {
+    store.getState().setTableComment('t:10', 'People');
+    expect(store.getState().desired.tables['t:10']!.comment).toBe('People');
+    expect(opKinds()).toEqual(['setComment']);
+    store.getState().setTableComment('t:10', null);
+    expect(store.getState().desired.tables['t:10']!.comment).toBeNull();
+    expect(opKinds()).toEqual([]);
+  });
+
+  test('ignores a table that is not there', () => {
+    store.getState().setTableComment('nope', 'x');
+    expect(opKinds()).toEqual([]);
+  });
+});
+
 describe('addTable', () => {
   test('a new table starts with an id bigint identity primary key', () => {
     const id = store.getState().addTable('s:1');

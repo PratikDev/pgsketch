@@ -5,6 +5,7 @@ import { ROW_HEIGHT } from '@/layout/autoLayout';
 import { cn } from '@/lib/utils';
 import { handleId } from './edges';
 import type { ColumnView } from './model-view';
+import { CommentMark, CommentPopover } from '@/editors/CommentPopover';
 import { DefaultPopover } from '@/editors/DefaultPopover';
 import { InlineText } from '@/editors/InlineText';
 import { TypePicker } from '@/editors/TypePicker';
@@ -88,12 +89,23 @@ export function ColumnRow({
         ))}
       </span>
       <span className="ml-auto flex shrink-0 items-center gap-1">
+        {column.comment !== null && (
+          <CommentMark id={column.id} comment={column.comment} />
+        )}
         {column.state.readOnly && (
           <LockIcon aria-label="Read-only" className="size-3.5" />
         )}
         <KeyBadges column={column} editable={editable} />
         {!column.state.readOnly && <RowMenu column={column} />}
       </span>
+      <CommentPopover
+        id={column.id}
+        label={column.name}
+        comment={column.comment}
+        onSave={(comment) =>
+          schemaStore.getState().setColumnComment(column.id, comment)
+        }
+      />
       {/* the four ends a foreign key line can have on this row: either side, starting or ending; a line is drawn from one to the handle of another row */}
       {(['left', 'right'] as const).flatMap((side) =>
         (['source', 'target'] as const).map((role) => (
