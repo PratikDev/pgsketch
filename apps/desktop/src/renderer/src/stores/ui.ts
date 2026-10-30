@@ -17,6 +17,9 @@ export interface UiState {
   /** The database role can't create temporary tables, so expressions are kept as typed. */
   normalizationFallback: boolean;
   setNormalizationFallback: () => void;
+  /** Why the connection to the database was lost, while it is. */
+  connectionLost: string | null;
+  setConnectionLost: (reason: string | null) => void;
   toggleSchema: (schemaId: Id) => void;
   showAllSchemas: () => void;
 }
@@ -35,6 +38,8 @@ export const createUiStore = () =>
       ),
     normalizationFallback: false,
     setNormalizationFallback: () => set({ normalizationFallback: true }),
+    connectionLost: null,
+    setConnectionLost: (reason) => set({ connectionLost: reason }),
     cancelEditing: () => set({ editing: null, addedColumn: null }),
     toggleSchema: (schemaId) =>
       set(({ hiddenSchemas }) => ({

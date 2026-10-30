@@ -26,9 +26,13 @@ export interface CoreSlice {
   version: number;
   /** Replaces everything with a freshly loaded schema and no edits. */
   load: (introspection: Introspection) => void;
+  /** Takes a schema read later as the loaded one, and the edits are gone: they are in it, or nobody wants them. */
+  adopt: (introspection: Introspection) => void;
   /** Puts the edits of an earlier session back on the loaded schema. */
   restore: (desired: SchemaModel) => void;
   markStale: () => void;
+  /** The database is as it was loaded again, so the edits fit it. */
+  clearStale: () => void;
   /**
    * Changes a copy of `desired` and makes it the new one. A copy per edit keeps every model the
    * store has handed out unchanged, which the memoized diff relies on.
@@ -58,7 +62,17 @@ export const createCoreSlice: StateCreator<SchemaStore, [], [], CoreSlice> = (
       version: 0,
     }),
   restore: (desired) => set((s) => ({ desired, version: s.version + 1 })),
+  adopt: ({ model, casts, fingerprint }) =>
+    set((s) => ({
+      baseline: model,
+      desired: structuredClone(model),
+      casts,
+      loadedFingerprint: fingerprint,
+      stale: false,
+      version: s.version + 1,
+    })),
   markStale: () => set({ stale: true }),
+  clearStale: () => set({ stale: false }),
   edit: (change) => {
     const desired = structuredClone(get().desired);
     change(desired);

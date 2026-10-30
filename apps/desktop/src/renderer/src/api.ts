@@ -6,6 +6,7 @@ import type {
   IpcInputs,
   IpcResults,
   Positions,
+  PgsketchApi,
 } from '../../shared/ipc-contract';
 
 /** Reads `window.api` when called, so a test can put its own in place. */
@@ -27,9 +28,11 @@ export const api = {
     recent: () => call('connection.recent'),
     forget: (connectionId: string) =>
       call('connection.forget', { connectionId }),
+    reconnect: () => call('connection.reconnect'),
   },
   schema: {
     load: () => call('schema.load'),
+    fingerprint: () => call('schema.fingerprint'),
   },
   expr: {
     normalize: (request: IpcInputs['expr.normalize']) =>
@@ -47,3 +50,7 @@ export const api = {
       call('layout.put', { dbKey, positions }),
   },
 };
+
+/** What the main process says happened, without being asked. Returns what stops listening. */
+export const onEvent: PgsketchApi['on'] = (event, listener) =>
+  window.api.on(event, listener);

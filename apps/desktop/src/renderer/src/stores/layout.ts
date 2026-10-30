@@ -25,6 +25,8 @@ export interface LayoutState {
   move: (tableId: Id, point: Point) => void;
   /** The auto-layout put these tables somewhere. */
   place: (positions: Positions) => void;
+  /** Tables that now have other ids (the database made them) keep the place they had. */
+  remap: (ids: Record<Id, Id>) => void;
   /** Saves now whatever has not been saved yet. */
   flush: () => Promise<void>;
 }
@@ -67,6 +69,16 @@ export function createLayoutStore(deps: LayoutDeps = appDeps) {
         changed({ ...get().positions, [tableId]: point }),
 
       place: (placed) => changed({ ...get().positions, ...placed }),
+
+      remap: (ids) => {
+        const positions = { ...get().positions };
+        for (const [from, to] of Object.entries(ids)) {
+          const at = positions[from];
+          delete positions[from];
+          if (at && !positions[to]) positions[to] = at;
+        }
+        changed(positions);
+      },
 
       flush: async () => {
         clearTimeout(timer);

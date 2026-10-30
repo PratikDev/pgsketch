@@ -163,3 +163,33 @@ describe('moving and saving', () => {
     expect(store.getState().dbKey).toBe('other');
   });
 });
+
+describe('remapping', () => {
+  test('a table that has another id now keeps its place under it, and the old id is forgotten', async () => {
+    const store = await opened({
+      'uuid-a': { x: 10, y: 20 },
+      't:1': { x: 1, y: 1 },
+    });
+    store.getState().remap({ 'uuid-a': 't:900' });
+    expect(store.getState().positions).toEqual({
+      't:900': { x: 10, y: 20 },
+      't:1': { x: 1, y: 1 },
+    });
+  });
+
+  test('is saved like a move', async () => {
+    const store = await opened({ 'uuid-a': { x: 10, y: 20 } });
+    store.getState().remap({ 'uuid-a': 't:900' });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(saved).toEqual([['k', { 't:900': { x: 10, y: 20 } }]]);
+  });
+
+  test('leaves a place already taken under the new id as it is, and ignores a table it has no place for', async () => {
+    const store = await opened({
+      'uuid-a': { x: 10, y: 20 },
+      't:900': { x: 5, y: 5 },
+    });
+    store.getState().remap({ 'uuid-a': 't:900', 'uuid-none': 't:901' });
+    expect(store.getState().positions).toEqual({ 't:900': { x: 5, y: 5 } });
+  });
+});
