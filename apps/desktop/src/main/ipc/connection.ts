@@ -28,6 +28,9 @@ const messageOf = (error: unknown): string =>
 
 export function registerConnection(ipc: IpcRegistry, deps: IpcDeps): void {
   const { connections, layouts, drafts, secrets, session, emit } = deps;
+  /** What was opened last, in memory only, so that a lost connection can be opened again. */
+  let last: { params: ConnectionParams; saved: SessionInfo['saved'] } | null =
+    null;
 
   /**
    * Connects, makes it the window's open database (closing the one it replaces) and describes it.
@@ -65,6 +68,7 @@ export function registerConnection(ipc: IpcRegistry, deps: IpcDeps): void {
         deps.pollMs,
       );
       await session.replace({ connection, normalizer, poller, info });
+      last = { params, saved };
       return info;
     } catch (error) {
       await connection.close().catch(() => undefined);
@@ -143,7 +147,18 @@ export function registerConnection(ipc: IpcRegistry, deps: IpcDeps): void {
     }),
   );
 
-  registerIpc(ipc, 'connection.close', () => session.close());
+  registerIpc(ipc, 'connection.close', () => {
+    last = null;
+    return session.close();
+  });
+
+  registerIpc(ipc, 'connection.reconnect', () =>
+    opened(async () => {
+      if (!last) throw new ConnectionError('There is nothing to reconnect to');
+      const { params, saved } = last;
+      return start(params, () => saved);
+    }),
+  );
 
   registerIpc(ipc, 'connection.recent', () => connections.list());
 

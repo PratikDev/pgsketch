@@ -91,6 +91,8 @@ const schemas = {
   }),
   'connection.openSaved': z.object({ connectionId: id }),
   'connection.close': z.void(),
+  /** Opens the database that was open again, after the connection was lost. */
+  'connection.reconnect': z.void(),
   'connection.recent': z.void(),
   'connection.forget': z.object({ connectionId: id }),
   'schema.load': z.void(),
@@ -191,6 +193,7 @@ export interface IpcResults {
   'connection.open': OpenResult;
   'connection.openSaved': OpenResult;
   'connection.close': void;
+  'connection.reconnect': OpenResult;
   'connection.recent': SavedConnection[];
   'connection.forget': void;
   'schema.load': Introspection;

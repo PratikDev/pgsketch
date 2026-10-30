@@ -257,6 +257,72 @@ describe('open', () => {
   });
 });
 
+describe('reconnect', () => {
+  test('opens the database that was open again, with the same settings, after the connection was lost', async () => {
+    const opens: ConnectionParams[] = [];
+    let onLost: ((e: Error) => void) | undefined;
+    const { call, deps } = setup({
+      open: async (p, options) => {
+        opens.push(p);
+        onLost = options?.onLost;
+        return fakeServerConnection();
+      },
+    });
+    const first = opened(
+      await call('connection.open', { params, remember: false }),
+    );
+    onLost?.(new Error('gone'));
+    expect(deps.session.current()).toBeNull();
+    const again = opened(await call('connection.reconnect'));
+    expect(opens).toEqual([params, params]);
+    expect(again).toEqual(first);
+    expect(deps.session.current()?.info).toEqual(first);
+  });
+
+  test('keeps what was saved about the connection, so the database key is the same', async () => {
+    const { call, deps } = setup();
+    const first = opened(
+      await call('connection.open', { params, remember: true }),
+    );
+    expect(first.saved).not.toBeNull();
+    const again = opened(await call('connection.reconnect'));
+    expect(again.dbKey).toBe(first.dbKey);
+    expect(again.saved).toEqual(first.saved);
+    expect(deps.connections.list()).toHaveLength(1);
+  });
+
+  test('says so when the server is still not there, and tries again the next time', async () => {
+    let up = true;
+    const { call } = setup({
+      open: async () => {
+        if (!up) throw new ConnectionError('Connection refused');
+        return fakeServerConnection();
+      },
+    });
+    opened(await call('connection.open', { params, remember: false }));
+    up = false;
+    expect(await call('connection.reconnect')).toEqual({
+      status: 'failed',
+      message: 'Connection refused',
+    });
+    up = true;
+    opened(await call('connection.reconnect'));
+  });
+
+  test('has nothing to open when nothing was, or the database was closed on purpose', async () => {
+    const { call } = setup();
+    expect(await call('connection.reconnect')).toEqual({
+      status: 'failed',
+      message: 'There is nothing to reconnect to',
+    });
+    opened(await call('connection.open', { params, remember: false }));
+    await call('connection.close');
+    expect(await call('connection.reconnect')).toMatchObject({
+      status: 'failed',
+    });
+  });
+});
+
 describe('saved connections', () => {
   async function remembered(over: Parameters<typeof testDeps>[0] = {}) {
     const opens: ConnectionParams[] = [];

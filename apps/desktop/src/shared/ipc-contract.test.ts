@@ -56,6 +56,7 @@ const examples: Record<IpcChannel, { valid: unknown[]; invalid: unknown[] }> = {
     valid: [{ connectionId: 'abc' }],
     invalid: [{}, { connectionId: '' }, { connectionId: 7 }],
   },
+  'connection.reconnect': { valid: [undefined], invalid: [{}, 'x'] },
   'connection.close': { valid: [undefined], invalid: [{}] },
   'connection.recent': { valid: [undefined], invalid: [1] },
   'connection.forget': {

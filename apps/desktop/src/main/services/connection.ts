@@ -156,11 +156,14 @@ export async function openConnection(
     // `pg` raises an unhandled error when a connection that nobody is waiting on breaks, and can
     // raise more than one for the same break; only the first is reported, and none after `close`
     let reported = false;
-    client.on('error', (error) => {
+    const lost = (error: Error) => {
       if (reported) return;
       reported = true;
       onLost?.(error);
-    });
+    };
+    client.on('error', lost);
+    // a server that stops can close the connection without saying why
+    client.on('end', () => lost(new Error('The server closed the connection')));
 
     let tail: Promise<unknown> = Promise.resolve();
     const exclusive = <T>(work: (q: Query) => Promise<T>): Promise<T> => {
