@@ -1256,6 +1256,277 @@ test('edits made on a database that was dropped and made again while the app was
   }
 });
 
+/** A server of its own with one table to edit, for the tests that change the database from outside. */
+async function startScratchServer(columns = 'a text, b text') {
+  const extra = await startE2eServer();
+  await extra.admin.query(
+    `CREATE TABLE public.scratch (id integer PRIMARY KEY, ${columns})`,
+  );
+  return extra;
+}
+
+const changes = (window: Page, n: number) =>
+  window.getByText(n === 1 ? '1 change' : `${n} changes`, { exact: true });
+/** Drags a toast out to the right, as a swipe would, and lets go. */
+async function swipeAway(window: Page, toast: Locator) {
+  const box = (await toast.boundingBox())!;
+  const y = box.y + box.height / 2;
+  await window.mouse.move(box.x + 20, y);
+  await window.mouse.down();
+  await window.mouse.move(box.x + 400, y, { steps: 12 });
+  await window.mouse.up();
+}
+
+const toastWith = (window: Page, text: string) =>
+  window.locator('[data-sonner-toast]').filter({ hasText: text });
+
+test('the SQL of the edits, run from outside, is taken: changes applied, and a new table keeps its place', async () => {
+  test.setTimeout(120_000);
+  const extra = await startScratchServer();
+  try {
+    const first = await launchApp();
+    const { window } = first;
+    await connectThroughForm(window, extra, E2E_PASSWORD);
+    await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await zoomUntil(window, false);
+    const at = await emptyPoint(window);
+    await window.mouse.dblclick(at.x, at.y);
+    await expect(
+      window.getByRole('textbox', { name: 'Table name' }),
+    ).toBeFocused();
+    await window.keyboard.type('tags');
+    await window.keyboard.press('Enter');
+    const tags = window.getByRole('region', { name: 'public.tags' });
+    await expect(tags).toHaveAttribute('data-status', 'added');
+    const placed = await spot(window, 'public.tags');
+    await expect(changes(window, 1)).toBeVisible();
+
+    // what the SQL of this edit would do, done by someone else
+    await extra.admin.query(
+      'CREATE TABLE public.tags (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY)',
+    );
+    await expect(toastWith(window, 'Changes applied')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(changes(window, 0)).toBeVisible();
+    // now a table of the database, with the id the database gave it, in the same place
+    await expect(tags).not.toHaveAttribute('data-status');
+    expect(await spot(window, 'public.tags')).toBe(placed);
+    await expect(
+      window.locator('.react-flow__node', { has: tags }),
+    ).toHaveAttribute('data-id', /^t:\d+$/);
+
+    // nothing of it is kept: the draft was cleared, and the place is the table's now
+    await window.waitForTimeout(1_500);
+    await first.app.close();
+    const second = await launchApp(first.dataDir);
+    await connectThroughForm(second.window, extra, E2E_PASSWORD);
+    await expect(second.window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await expect(changes(second.window, 0)).toBeVisible();
+    await expect(second.window.locator('[data-sonner-toast]')).toHaveCount(0);
+    await zoomUntil(second.window, false);
+    expect(await spot(second.window, 'public.tags')).toBe(placed);
+    await second.app.close();
+  } finally {
+    await extra.stop();
+  }
+});
+
+test('half of the SQL run from outside goes stale, and the other half brings it back', async () => {
+  test.setTimeout(120_000);
+  const extra = await startScratchServer();
+  try {
+    const { app, window } = await launchApp();
+    await connectThroughForm(window, extra, E2E_PASSWORD);
+    await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await showTable(window, 'public.scratch');
+    for (const [from, to] of [
+      ['a', 'aa'],
+      ['b', 'bb'],
+    ] as const) {
+      await rowOf(window, 'public.scratch', from)
+        .getByRole('button', { name: from, exact: true })
+        .click();
+      await window.keyboard.type(to);
+      await window.keyboard.press('Tab');
+    }
+    await expect(changes(window, 2)).toBeVisible();
+
+    await extra.admin.query('ALTER TABLE public.scratch RENAME COLUMN a TO aa');
+    const banner = window.getByText(
+      'The database schema changed outside pgsketch.',
+    );
+    await expect(banner).toBeVisible({ timeout: 10_000 });
+    // the edits are all still there
+    await expect(changes(window, 2)).toBeVisible();
+
+    await extra.admin.query('ALTER TABLE public.scratch RENAME COLUMN b TO bb');
+    await expect(banner).toHaveCount(0, { timeout: 10_000 });
+    await expect(toastWith(window, 'Changes applied')).toBeVisible();
+    await expect(changes(window, 0)).toBeVisible();
+    await app.close();
+  } finally {
+    await extra.stop();
+  }
+});
+
+test('an unrelated change from outside shows the banner, and Reload throws the edits away once confirmed', async () => {
+  test.setTimeout(120_000);
+  const extra = await startScratchServer();
+  try {
+    const { app, window } = await launchApp();
+    await connectThroughForm(window, extra, E2E_PASSWORD);
+    await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await showTable(window, 'public.scratch');
+    await rowOf(window, 'public.scratch', 'a')
+      .getByRole('button', { name: 'a', exact: true })
+      .click();
+    await window.keyboard.type('renamed');
+    await window.keyboard.press('Tab');
+    await expect(changes(window, 1)).toBeVisible();
+
+    await extra.admin.query('ALTER TABLE public.scratch ADD COLUMN c integer');
+    await expect(
+      window.getByText('The database schema changed outside pgsketch.'),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // asked first, and Cancel changes nothing
+    await window.getByRole('button', { name: 'Reload', exact: true }).click();
+    await expect(
+      window.getByRole('heading', {
+        name: 'Reload and discard 1 unsaved change?',
+      }),
+    ).toBeVisible();
+    await window.getByRole('button', { name: 'Cancel' }).click();
+    await expect(window.getByRole('dialog')).toHaveCount(0);
+    await expect(changes(window, 1)).toBeVisible();
+    // Cancel leaves the notice where it was, with its button
+    await expect(
+      window.getByText('The database schema changed outside pgsketch.'),
+    ).toBeVisible();
+
+    await window.getByRole('button', { name: 'Reload', exact: true }).click();
+    await window.getByRole('button', { name: 'Reload and discard' }).click();
+    await expect(
+      window.getByText('The database schema changed outside pgsketch.'),
+    ).toHaveCount(0);
+    await expect(changes(window, 0)).toBeVisible();
+    // what the database has now, and none of the edits
+    await expect(rowOf(window, 'public.scratch', 'a')).toBeVisible();
+    await expect(rowOf(window, 'public.scratch', 'c')).toBeVisible();
+    await app.close();
+  } finally {
+    await extra.stop();
+  }
+});
+
+test('SQL run while the app was closed is told on the next start as changes applied', async () => {
+  test.setTimeout(120_000);
+  const extra = await startScratchServer();
+  try {
+    const first = await launchApp();
+    await connectThroughForm(first.window, extra, E2E_PASSWORD);
+    await expect(first.window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await showTable(first.window, 'public.scratch');
+    await rowOf(first.window, 'public.scratch', 'a')
+      .getByRole('button', { name: 'a', exact: true })
+      .click();
+    await first.window.keyboard.type('renamed');
+    await first.window.keyboard.press('Tab');
+    await expect(changes(first.window, 1)).toBeVisible();
+    await first.window.waitForTimeout(1_500);
+    await first.app.close();
+
+    await extra.admin.query(
+      'ALTER TABLE public.scratch RENAME COLUMN a TO renamed',
+    );
+
+    const second = await launchApp(first.dataDir);
+    await connectThroughForm(second.window, extra, E2E_PASSWORD);
+    await expect(second.window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await expect(toastWith(second.window, 'Changes applied')).toBeVisible();
+    await expect(toastWith(second.window, 'not restored')).toHaveCount(0);
+    await expect(changes(second.window, 0)).toBeVisible();
+    await second.app.close();
+
+    // and not again the time after
+    const third = await launchApp(first.dataDir);
+    await connectThroughForm(third.window, extra, E2E_PASSWORD);
+    await expect(third.window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await expect(third.window.locator('[data-sonner-toast]')).toHaveCount(0);
+    await third.app.close();
+  } finally {
+    await extra.stop();
+  }
+});
+
+test('when the connection is lost the banner says so, keeps the edits, and reconnects', async () => {
+  test.setTimeout(120_000);
+  const extra = await startScratchServer();
+  try {
+    const { app, window } = await launchApp();
+    await connectThroughForm(window, extra, E2E_PASSWORD);
+    await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await showTable(window, 'public.scratch');
+    await rowOf(window, 'public.scratch', 'a')
+      .getByRole('button', { name: 'a', exact: true })
+      .click();
+    await window.keyboard.type('renamed');
+    await window.keyboard.press('Tab');
+    await expect(changes(window, 1)).toBeVisible();
+
+    // the server ends the sessions of the app
+    await extra.admin.query(
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = 'pgsketch'",
+    );
+    const lost = window.getByText(/The connection to the database was lost/);
+    await expect(lost).toBeVisible({ timeout: 10_000 });
+    const notice = toastWith(window, 'connection to the database was lost');
+    await expect(notice).toHaveAttribute('data-dismissible', 'false');
+    await swipeAway(window, notice);
+    await window.waitForTimeout(600);
+    await expect(notice).toBeVisible();
+    await expect(window.getByText(/Your edits are kept/)).toBeVisible();
+    await expect(changes(window, 1)).toBeVisible();
+
+    await window.getByRole('button', { name: 'Reconnect' }).click();
+    await expect(lost).toHaveCount(0);
+    // the edits are as they were, on a database that is as it was
+    await expect(changes(window, 1)).toBeVisible();
+    await expect(
+      window.getByText('The database schema changed outside pgsketch.'),
+    ).toHaveCount(0);
+    await app.close();
+  } finally {
+    await extra.stop();
+  }
+});
+
+test('when the server stops the banner says so, and Reconnect says it cannot while it is down', async () => {
+  test.setTimeout(120_000);
+  const extra = await startScratchServer();
+  const { app, window } = await launchApp();
+  try {
+    await connectThroughForm(window, extra, E2E_PASSWORD);
+    await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await extra.stop();
+    await expect(
+      window.getByText(/The connection to the database was lost/),
+    ).toBeVisible({ timeout: 15_000 });
+    await window.getByRole('button', { name: 'Reconnect' }).click();
+    await expect(window.locator('[data-sonner-toast]')).toHaveCount(1, {
+      timeout: 15_000,
+    });
+    // still lost, and it can be tried again
+    await expect(
+      window.getByRole('button', { name: 'Reconnect' }),
+    ).toBeEnabled();
+  } finally {
+    await app.close();
+    await extra.stop().catch(() => undefined);
+  }
+});
+
 test('a new table goes in the one schema the filter leaves showing', async () => {
   const { app, window } = await openEditor();
   await window.getByRole('button', { name: /^Schemas/ }).click();
