@@ -699,6 +699,25 @@ test('a schema the migration creates is renamed and deleted from the pen and the
   await app.close();
 });
 
+test('what the editor refuses is said in a toast: a type an identity column cannot have', async () => {
+  const { app, window } = await openEditor('public.users');
+  const id = rowOf(window, 'public.users', 'id');
+  await id.getByRole('button', { name: 'Column type' }).click();
+  await window.getByRole('option', { name: 'text', exact: true }).click();
+  const toast = window.locator('[data-sonner-toast]');
+  await expect(toast).toHaveCount(1);
+  await expect(toast).toContainText('identity column');
+  // the column keeps its type, and the picker is still open for another try
+  await expect(window.getByPlaceholder('Search types…')).toBeVisible();
+  await expect(id.getByRole('button', { name: 'Column type' })).toHaveText(
+    'bigint',
+  );
+  // the same refusal again does not pile up a second toast
+  await window.getByRole('option', { name: 'text', exact: true }).click();
+  await expect(toast).toHaveCount(1);
+  await app.close();
+});
+
 test('a new table goes in the one schema the filter leaves showing', async () => {
   const { app, window } = await openEditor();
   await window.getByRole('button', { name: /^Schemas/ }).click();
