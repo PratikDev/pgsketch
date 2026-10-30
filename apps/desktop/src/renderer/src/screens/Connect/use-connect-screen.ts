@@ -1,6 +1,7 @@
 import { api } from '@/api';
 import { useForm, useSelector } from '@tanstack/react-form';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import type {
   ConnectionDefaults,
   OpenResult,
@@ -15,13 +16,6 @@ const FALLBACK_DEFAULTS: ConnectionDefaults = {
   socketPath: '/var/run/postgresql',
 };
 
-/**
- * The message a failed connection left on the form, if there is one. The form's own errors are the
- * schema's, which are objects keyed by field; a message set by hand is a string.
- */
-const serverMessage = (errors: readonly unknown[]): string | null =>
-  errors.find((error): error is string => typeof error === 'string') ?? null;
-
 /** The Connect screen: its form, the recent connections, and opening one. */
 export function useConnectScreen(onOpened: (session: SessionInfo) => void) {
   const [defaults, setDefaults] = useState(FALLBACK_DEFAULTS);
@@ -31,21 +25,18 @@ export function useConnectScreen(onOpened: (session: SessionInfo) => void) {
   const form = useForm({
     defaultValues: initialValues,
     validators: { onSubmit: connectSchema },
-    onSubmit: async ({ value, formApi }) => {
+    onSubmit: async ({ value }) => {
       // the form hands over what was typed; the schema turns it into the connection parameters
       const { params, remember } = connectSchema.parse(value);
       const result = await api.connection.open(params, remember);
-      showResult(result, formApi.setErrorMap);
+      showResult(result);
     },
   });
 
-  /** Leaves the screen when the database opened, otherwise puts the reason on the form. */
-  function showResult(
-    result: OpenResult,
-    setErrorMap: typeof form.setErrorMap,
-  ): void {
+  /** Leaves the screen when the database opened, otherwise says why not. */
+  function showResult(result: OpenResult): void {
     if (result.status === 'opened') return onOpened(result.session);
-    setErrorMap({ onSubmit: { form: result.message, fields: {} } });
+    toast.error(result.message);
   }
 
   useEffect(() => {
@@ -64,29 +55,18 @@ export function useConnectScreen(onOpened: (session: SessionInfo) => void) {
   }, []);
 
   const submitting = useSelector(form.store, (s) => s.isSubmitting);
-  const message = useSelector(form.store, (s) => serverMessage(s.errors));
 
   return {
     form,
     defaults,
     recent,
-    message,
     busy: submitting || openingRecent,
     openRecent: async (connectionId: string): Promise<void> => {
-      form.setErrorMap({ onSubmit: undefined });
       setOpeningRecent(true);
       try {
-        showResult(
-          await api.connection.openSaved(connectionId),
-          form.setErrorMap,
-        );
+        showResult(await api.connection.openSaved(connectionId));
       } catch (error) {
-        form.setErrorMap({
-          onSubmit: {
-            form: error instanceof Error ? error.message : String(error),
-            fields: {},
-          },
-        });
+        toast.error(error instanceof Error ? error.message : String(error));
       }
       setOpeningRecent(false);
     },

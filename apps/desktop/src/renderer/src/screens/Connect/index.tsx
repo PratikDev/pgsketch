@@ -1,4 +1,3 @@
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -94,11 +93,6 @@ export function Connect({
                 </Field>
               )}
             </form.Field>
-            {screen.message !== null && (
-              <Alert variant="destructive">
-                <AlertDescription>{screen.message}</AlertDescription>
-              </Alert>
-            )}
             <Button type="submit" disabled={busy}>
               {busy ? 'Connecting…' : 'Connect'}
             </Button>

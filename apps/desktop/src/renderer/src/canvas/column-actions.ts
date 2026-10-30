@@ -1,4 +1,5 @@
 import type { Id } from '@pgsketch/core';
+import { showRefusal } from '@/lib/refusal';
 import { schemaStore } from '@/stores/schema';
 import { uiStore } from '@/stores/ui';
 
@@ -10,8 +11,7 @@ export function addColumnAndEdit(tableId: Id): void {
 
 /** Removes a column; if something depends on it, says so instead. */
 export function deleteColumn(columnId: Id): void {
-  const reason = schemaStore.getState().removeColumn(columnId);
-  if (reason) uiStore.getState().showNotice(reason);
+  showRefusal(schemaStore.getState().removeColumn(columnId));
 }
 
 /**

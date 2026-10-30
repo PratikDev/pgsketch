@@ -8,6 +8,10 @@ import { installFakeApi } from '@/test-utils';
 import { fixtureModel } from '@/test-model';
 import type { SessionInfo } from '../../../../shared/ipc-contract';
 import { Editor } from '.';
+import { toast } from 'sonner';
+
+// toasts are drawn by the Toaster, which these tests don't mount: they check what was asked of `toast`
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }));
 
 const session: SessionInfo = {
   serverVersion: '16.4',
@@ -48,22 +52,29 @@ describe('Editor', () => {
     expect(screen.queryByText('Loading the schema…')).not.toBeInTheDocument();
   });
 
-  test('says what went wrong when the schema cannot be loaded, and still lets you leave', async () => {
+  test('says what went wrong when the schema cannot be loaded, in a toast that goes with the Editor, and still lets you leave', async () => {
     installFakeApi({
       'schema.load': () => {
         throw new Error('No database is open');
       },
     });
     const onDisconnect = vi.fn();
-    render(<Editor session={session} onDisconnect={onDisconnect} />);
-    expect(
-      await screen.findByText(/Couldn't load the schema: No database is open/),
-    ).toBeInTheDocument();
+    const { unmount } = render(
+      <Editor session={session} onDisconnect={onDisconnect} />,
+    );
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Couldn't load the schema: No database is open",
+        { id: 'load-failed', duration: Infinity },
+      ),
+    );
     expect(
       screen.queryByRole('region', { hidden: true }),
     ).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
     expect(onDisconnect).toHaveBeenCalled();
+    unmount();
+    expect(toast.dismiss).toHaveBeenCalledWith('load-failed');
   });
 
   test('says which database is open, and that a password was not saved when it was not', async () => {

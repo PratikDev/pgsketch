@@ -1,11 +1,11 @@
 import { useEffect } from 'react';
+import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Canvas } from '@/canvas/Canvas';
 import { ChangeCount } from '@/chrome/ChangeCount';
 import { SchemaFilter } from '@/chrome/SchemaFilter';
 import { layoutStore } from '@/stores/layout';
-import { uiStore, useUiStore } from '@/stores/ui';
 import type { SessionInfo } from '../../../../shared/ipc-contract';
 import { useLoadSchema } from './use-load-schema';
 
@@ -18,7 +18,13 @@ export function Editor({
   onDisconnect: () => void;
 }) {
   const load = useLoadSchema(session.dbKey);
-  const notice = useUiStore((s) => s.notice);
+  // a schema that could not be read is said once, and stays until the Editor goes
+  useEffect(() => {
+    if (load.status !== 'failed') return;
+    const message = `Couldn't load the schema: ${load.message}`;
+    toast.error(message, { id: 'load-failed', duration: Infinity });
+    return () => void toast.dismiss('load-failed');
+  }, [load]);
   // positions moved a moment ago are saved before the Editor goes
   useEffect(() => () => void layoutStore.getState().flush(), []);
   return (
@@ -45,31 +51,9 @@ export function Editor({
           </Button>
         </div>
       </header>
-      {notice && (
-        <Alert variant="destructive" className="m-2 w-auto py-1">
-          <AlertDescription className="flex items-center gap-2">
-            {notice}
-            <Button
-              variant="ghost"
-              size="xs"
-              className="ml-auto"
-              onClick={() => uiStore.getState().clearNotice()}
-            >
-              Dismiss
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
       <div className="min-h-0 flex-1">
         {load.status === 'loading' && (
           <p className="p-4 text-muted-foreground">Loading the schema…</p>
-        )}
-        {load.status === 'failed' && (
-          <Alert variant="destructive" className="m-4 w-auto">
-            <AlertDescription>
-              Couldn't load the schema: {load.message}
-            </AlertDescription>
-          </Alert>
         )}
         {load.status === 'ready' && <Canvas />}
       </div>

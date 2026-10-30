@@ -2,13 +2,17 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ReactFlowProvider, type NodeProps } from '@xyflow/react';
 import { act } from 'react';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { toast } from 'sonner';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { useDerived } from '@/stores/derived';
 import { schemaStore, useSchemaStore } from '@/stores/schema';
 import { uiStore } from '@/stores/ui';
 import { fixtureModel } from '@/test-model';
 import { tableViews, unionOf } from './model-view';
 import { TableNode, type TableNodeType } from './TableNode';
+
+// toasts are drawn by the Toaster, which these tests don't mount: they check what was asked of `toast`
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 const casts = { categories: {}, domains: {}, casts: {} };
 beforeEach(() =>
@@ -19,9 +23,7 @@ beforeEach(() =>
   ),
 );
 afterEach(() =>
-  act(() =>
-    uiStore.setState({ editing: null, addedColumn: null, notice: null }),
-  ),
+  act(() => uiStore.setState({ editing: null, addedColumn: null })),
 );
 
 /** A table drawn from the store, as the canvas draws it. */
@@ -156,8 +158,9 @@ describe('deleting a column', () => {
       screen.getByRole('menuitem', { name: 'Delete column' }),
     );
     expect(columnsOf('t:20')).toContain('total');
-    expect(uiStore.getState().notice).toBe(
+    expect(toast.error).toHaveBeenCalledWith(
       'Can\'t delete column "total": view "open_invoices" still depends on it',
+      expect.anything(),
     );
   });
 

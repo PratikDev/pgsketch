@@ -1,13 +1,17 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
+import { toast } from 'sonner';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { tableViews, unionOf } from '@/canvas/model-view';
 import { useDerived } from '@/stores/derived';
 import { schemaStore, useSchemaStore } from '@/stores/schema';
 import { uiStore } from '@/stores/ui';
 import { fixtureModel } from '@/test-model';
 import { SchemaPicker } from './SchemaPicker';
+
+// toasts are drawn by the Toaster, which these tests don't mount: they check what was asked of `toast`
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 const casts = { categories: {}, domains: {}, casts: {} };
 beforeEach(() =>
@@ -20,7 +24,7 @@ beforeEach(() =>
 afterEach(() =>
   act(() => {
     uiStore.getState().cancelEditing();
-    uiStore.getState().clearNotice();
+    vi.mocked(toast.error).mockClear();
   }),
 );
 
@@ -153,7 +157,7 @@ describe('SchemaPicker', () => {
       expect(
         screen.queryByRole('menuitemradio', { name: /new_schema/ }),
       ).not.toBeInTheDocument();
-      expect(uiStore.getState().notice).toBeNull();
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     test('the trash can on a schema with a table in it says so, and deletes nothing', async () => {
@@ -164,8 +168,11 @@ describe('SchemaPicker', () => {
         screen.getByRole('button', { name: 'Delete schema new_schema' }),
       );
       expect(schemaStore.getState().desired.schemas[schema]).toBeDefined();
-      expect(uiStore.getState().notice).toMatch(
-        /Can't delete schema "new_schema": table "new_table" is in it/,
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /Can't delete schema "new_schema": table "new_table" is in it/,
+        ),
+        expect.anything(),
       );
     });
   });

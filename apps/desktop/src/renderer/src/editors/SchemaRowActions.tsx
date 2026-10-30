@@ -3,12 +3,9 @@ import { PencilIcon, Trash2Icon } from 'lucide-react';
 import type { SyntheticEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { InlineText } from '@/editors/InlineText';
+import { showRefusal } from '@/lib/refusal';
 import { schemaStore, useSchemaStore } from '@/stores/schema';
 import { uiStore } from '@/stores/ui';
-
-const refuse = (reason: string | null) => {
-  if (reason) uiStore.getState().showNotice(reason);
-};
 
 /** Whether a schema can be renamed or deleted: only one the migration creates. */
 export const usePendingSchema = (schemaId: string): boolean =>
@@ -52,7 +49,9 @@ export function SchemaRowActions({ schema }: { schema: Schema }) {
         variant="ghost"
         size="icon-xs"
         aria-label={`Delete schema ${schema.name}`}
-        {...own(() => refuse(schemaStore.getState().removeSchema(schema.id)))}
+        {...own(() =>
+          showRefusal(schemaStore.getState().removeSchema(schema.id)),
+        )}
       >
         <Trash2Icon />
       </Button>
@@ -76,7 +75,7 @@ export function SchemaRenameInput({ schema }: { schema: Schema }) {
         label="Schema name"
         value={schema.name}
         onCommit={(name) =>
-          refuse(schemaStore.getState().renameSchema(schema.id, name))
+          showRefusal(schemaStore.getState().renameSchema(schema.id, name))
         }
         className="w-full"
       />

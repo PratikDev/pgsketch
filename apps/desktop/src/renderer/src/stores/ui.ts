@@ -14,10 +14,6 @@ export interface UiState {
   stopEditing: (key: string) => void;
   /** Ends whatever edit is open, as a click on the empty canvas does. */
   cancelEditing: () => void;
-  /** Why something the user did was refused, shown until it is dismissed. */
-  notice: string | null;
-  showNotice: (message: string) => void;
-  clearNotice: () => void;
   toggleSchema: (schemaId: Id) => void;
   showAllSchemas: () => void;
 }
@@ -35,9 +31,6 @@ export const createUiStore = () =>
         editing === key ? { editing: null, addedColumn: null } : {},
       ),
     cancelEditing: () => set({ editing: null, addedColumn: null }),
-    notice: null,
-    showNotice: (message) => set({ notice: message }),
-    clearNotice: () => set({ notice: null }),
     toggleSchema: (schemaId) =>
       set(({ hiddenSchemas }) => ({
         hiddenSchemas: hiddenSchemas.includes(schemaId)

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type {
   OpenResult,
   SavedConnection,
@@ -8,6 +8,12 @@ import type {
 } from '../../../../shared/ipc-contract';
 import { installFakeApi } from '@/test-utils';
 import { Connect } from '.';
+import { toast } from 'sonner';
+
+// toasts are drawn by the Toaster, which these tests don't mount: they check what was asked of `toast`
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }));
+
+beforeEach(() => vi.mocked(toast.error).mockClear());
 
 const session: SessionInfo = {
   serverVersion: '16.4',
@@ -167,46 +173,36 @@ describe('connecting', () => {
     expect(opens(calls)[0]?.args).toMatchObject([{ remember: false }]);
   });
 
-  test('a failure shows its message, stays on the form, and can be tried again', async () => {
+  test('a failure is shown as a toast, stays on the form, and can be tried again', async () => {
     const { user, onOpened } = setup({
       open: () => ({ status: 'failed', message: 'Host not found' }),
     });
     await user.type(field('Database'), 'app');
     await user.click(screen.getByRole('button', { name: 'Connect' }));
-    expect(await screen.findByText('Host not found')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Host not found'),
+    );
     expect(onOpened).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Connect' })).toBeEnabled();
     expect(field('Database')).toHaveValue('app');
   });
 
-  test('a failure can be tried again without changing anything, and clears when a field is edited', async () => {
+  test('a failure can be tried again without changing anything, and the same failure is shown again', async () => {
     const results: OpenResult[] = [
+      { status: 'failed', message: 'Host not found' },
       { status: 'failed', message: 'Host not found' },
       { status: 'opened', session },
     ];
     const { user, calls, onOpened } = setup({ open: () => results.shift()! });
     await user.type(field('Database'), 'app');
     await user.click(screen.getByRole('button', { name: 'Connect' }));
-    expect(await screen.findByText('Host not found')).toBeInTheDocument();
-
-    await user.type(field('Database'), 'x');
-    expect(screen.queryByText('Host not found')).not.toBeInTheDocument();
-
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole('button', { name: 'Connect' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(2));
     await user.click(screen.getByRole('button', { name: 'Connect' }));
     await waitFor(() => expect(onOpened).toHaveBeenCalledWith(session));
-    expect(opens(calls)).toHaveLength(2);
-  });
-
-  test('the same failure again, with nothing edited, is shown again', async () => {
-    const { user, calls } = setup({
-      open: () => ({ status: 'failed', message: 'Host not found' }),
-    });
-    await user.type(field('Database'), 'app');
-    await user.click(screen.getByRole('button', { name: 'Connect' }));
-    expect(await screen.findByText('Host not found')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Connect' }));
-    await waitFor(() => expect(opens(calls)).toHaveLength(2));
-    expect(await screen.findByText('Host not found')).toBeInTheDocument();
+    expect(opens(calls)).toHaveLength(3);
+    expect(toast.error).toHaveBeenCalledTimes(2);
   });
 
   test('while connecting the button says so and cannot be pressed again', async () => {
@@ -225,7 +221,7 @@ describe('connecting', () => {
       await screen.findByRole('button', { name: 'Connecting…' }),
     ).toBeDisabled();
     finish({ status: 'failed', message: 'nope' });
-    expect(await screen.findByText('nope')).toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('nope'));
   });
 });
 
@@ -259,9 +255,9 @@ describe('recent connections', () => {
         name: 'alice@db.example.com:5432/app',
       }),
     );
-    expect(
-      await screen.findByText('Enter the password again'),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Enter the password again'),
+    );
     expect(onOpened).not.toHaveBeenCalled();
   });
 

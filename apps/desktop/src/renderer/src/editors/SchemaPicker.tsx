@@ -15,6 +15,7 @@ import {
   whileRenaming,
 } from '@/editors/SchemaRowActions';
 import { useSchemas } from '@/hooks/use-schemas';
+import { showRefusal } from '@/lib/refusal';
 import { schemaStore } from '@/stores/schema';
 import { uiStore, useUiStore } from '@/stores/ui';
 
@@ -33,9 +34,6 @@ export function SchemaPicker({ table }: { table: TableView }) {
     return <span className="text-muted-foreground">{table.schema}.</span>;
 
   const idle = renaming ? whileRenaming : {};
-  const refuse = (reason: string | null) => {
-    if (reason) uiStore.getState().showNotice(reason);
-  };
 
   return (
     <DropdownMenu>
@@ -53,7 +51,9 @@ export function SchemaPicker({ table }: { table: TableView }) {
         <DropdownMenuRadioGroup
           value={table.schemaId}
           onValueChange={(schemaId) =>
-            refuse(schemaStore.getState().setTableSchema(table.id, schemaId))
+            showRefusal(
+              schemaStore.getState().setTableSchema(table.id, schemaId),
+            )
           }
         >
           {schemas.map((schema) =>
@@ -78,7 +78,9 @@ export function SchemaPicker({ table }: { table: TableView }) {
           onSelect={(event) => {
             event.preventDefault();
             const schemaId = schemaStore.getState().addSchema();
-            refuse(schemaStore.getState().setTableSchema(table.id, schemaId));
+            showRefusal(
+              schemaStore.getState().setTableSchema(table.id, schemaId),
+            );
             uiStore.getState().startEditing(`${schemaId}:name`);
           }}
         >

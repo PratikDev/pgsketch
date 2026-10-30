@@ -1,12 +1,15 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { schemaStore } from '@/stores/schema';
 import { uiStore } from '@/stores/ui';
 import { fixtureModel } from '@/test-model';
 import { tableViews } from './model-view';
 import { TableToolbar } from './TableToolbar';
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 // the toolbar is drawn next to a measured node, which jsdom has none of
 vi.mock('@xyflow/react', async (original) => ({
@@ -22,11 +25,10 @@ beforeEach(() =>
       .load({ model: fixtureModel, casts, fingerprint: 'f' }),
   ),
 );
-afterEach(() =>
-  act(() =>
-    uiStore.setState({ editing: null, addedColumn: null, notice: null }),
-  ),
-);
+afterEach(() => {
+  vi.mocked(toast.error).mockClear();
+  act(() => uiStore.setState({ editing: null, addedColumn: null }));
+});
 
 const table = (id: string, removed = false) => {
   const view = tableViews(fixtureModel).find((t) => t.id === id)!;
@@ -58,7 +60,10 @@ describe('TableToolbar', () => {
     render(<TableToolbar table={table('t:20')} visible />);
     await userEvent.click(screen.getByRole('button', { name: 'Delete table' }));
     expect(schemaStore.getState().desired.tables['t:20']).toBeDefined();
-    expect(uiStore.getState().notice).toMatch(/Can't delete table "invoices"/);
+    expect(toast.error).toHaveBeenCalledWith(
+      expect.stringMatching(/Can't delete table "invoices"/),
+      expect.anything(),
+    );
   });
 
   test('a removed table has only a restore button, which brings it back', async () => {

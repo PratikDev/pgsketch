@@ -27,7 +27,7 @@ const load = async (model = fixtureModel) => {
 
 afterEach(async () => {
   act(() => uiStore.getState().showAllSchemas());
-  act(() => uiStore.setState({ editing: null, notice: null }));
+  act(() => uiStore.setState({ editing: null }));
   saved.positions = {};
   await load(emptyModel());
 });

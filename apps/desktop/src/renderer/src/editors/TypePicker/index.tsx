@@ -1,5 +1,4 @@
 import type { PgType } from '@pgsketch/core';
-import { useState } from 'react';
 import { uiStore, useUiStore } from '@/stores/ui';
 import { typeLabel } from '@/canvas/model-view';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -16,6 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { showRefusal } from '@/lib/refusal';
 import { cn } from '@/lib/utils';
 import { TypeParams } from './TypeParams';
 import { BUILTIN_TYPES, builtinOf } from './types';
@@ -27,7 +27,7 @@ const sameType = (a: PgType, b: PgType) =>
 /**
  * A column's type, which opens a searchable list of the built-in types and the database's enums.
  * A type with parameters (`varchar`, `numeric`…) keeps the popover open for them; every change goes
- * straight to `onChange`, whose answer is why it was refused, if it was.
+ * straight to `onChange`, whose answer is why it was refused, if it was, and that is shown as a toast.
  */
 export function TypePicker({
   id,
@@ -46,7 +46,6 @@ export function TypePicker({
   const key = `${id}:type`;
   // open in the UI store, so the canvas can close it with a click on the empty canvas
   const open = useUiStore((s) => s.editing === key);
-  const [refusal, setRefusal] = useState<string | null>(null);
   const enums = useEnumTypes();
   const builtin = builtinOf(value);
 
@@ -59,7 +58,7 @@ export function TypePicker({
 
   const apply = (type: PgType) => {
     const reason = onChange(type);
-    setRefusal(reason);
+    showRefusal(reason);
     return reason === null;
   };
   const choose = (type: PgType) => {
@@ -74,10 +73,7 @@ export function TypePicker({
       open={open}
       onOpenChange={(next) => {
         if (next) uiStore.getState().startEditing(key);
-        else {
-          uiStore.getState().stopEditing(key);
-          setRefusal(null);
-        }
+        else uiStore.getState().stopEditing(key);
       }}
     >
       <PopoverTrigger asChild>
@@ -138,11 +134,6 @@ export function TypePicker({
             />
             Array
           </label>
-          {refusal && (
-            <p role="alert" className="text-xs text-destructive">
-              {refusal}
-            </p>
-          )}
         </div>
       </PopoverContent>
     </Popover>

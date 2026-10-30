@@ -1,8 +1,8 @@
 import { NodeToolbar, Position } from '@xyflow/react';
 import { PlusIcon, RotateCcwIcon, Trash2Icon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { showRefusal } from '@/lib/refusal';
 import { schemaStore } from '@/stores/schema';
-import { uiStore } from '@/stores/ui';
 import { addColumnAndEdit } from './column-actions';
 import type { TableView } from './model-view';
 import { isEditable } from './object-state';
@@ -50,10 +50,9 @@ export function TableToolbar({
               size="icon-sm"
               aria-label="Delete table"
               title="Delete table"
-              onClick={() => {
-                const reason = schemaStore.getState().removeTable(table.id);
-                if (reason) uiStore.getState().showNotice(reason);
-              }}
+              onClick={() =>
+                showRefusal(schemaStore.getState().removeTable(table.id))
+              }
             >
               <Trash2Icon />
             </Button>

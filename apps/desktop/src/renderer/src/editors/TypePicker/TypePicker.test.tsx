@@ -7,9 +7,14 @@ import { schemaStore } from '@/stores/schema';
 import { uiStore } from '@/stores/ui';
 import { fixtureModel } from '@/test-model';
 import { TypePicker } from '.';
+import { toast } from 'sonner';
+
+// toasts are drawn by the Toaster, which these tests don't mount: they check what was asked of `toast`
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }));
 
 const casts = { categories: {}, domains: {}, casts: {} };
 afterEach(() => act(() => uiStore.getState().cancelEditing()));
+beforeEach(() => vi.mocked(toast.error).mockClear());
 beforeEach(() =>
   act(() =>
     schemaStore
@@ -177,13 +182,14 @@ describe('TypePicker', () => {
     expect(onChange).toHaveBeenLastCalledWith({ name: 'text', isArray: false });
   });
 
-  test('a type the store refuses stays unchanged, says why, and the picker stays open', async () => {
+  test('a type the store refuses stays unchanged, says why in a toast, and the picker stays open', async () => {
     render(<Harness onChange={() => 'it is an identity column'} />);
     await open();
     await userEvent.click(screen.getByRole('option', { name: 'varchar' }));
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      'it is an identity column',
-    );
+    expect(toast.error).toHaveBeenCalledWith('it is an identity column', {
+      id: 'it is an identity column',
+    });
+    expect(screen.getByPlaceholderText('Search types…')).toBeVisible();
     expect(
       screen.getByRole('button', { name: 'Column type' }),
     ).toHaveTextContent('text');
