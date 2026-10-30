@@ -14,6 +14,9 @@ export interface UiState {
   stopEditing: (key: string) => void;
   /** Ends whatever edit is open, as a click on the empty canvas does. */
   cancelEditing: () => void;
+  /** The database role can't create temporary tables, so expressions are kept as typed. */
+  normalizationFallback: boolean;
+  setNormalizationFallback: () => void;
   toggleSchema: (schemaId: Id) => void;
   showAllSchemas: () => void;
 }
@@ -30,6 +33,8 @@ export const createUiStore = () =>
       set(({ editing }) =>
         editing === key ? { editing: null, addedColumn: null } : {},
       ),
+    normalizationFallback: false,
+    setNormalizationFallback: () => set({ normalizationFallback: true }),
     cancelEditing: () => set({ editing: null, addedColumn: null }),
     toggleSchema: (schemaId) =>
       set(({ hiddenSchemas }) => ({

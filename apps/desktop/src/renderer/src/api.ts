@@ -2,6 +2,7 @@ import type {
   ConnectionParams,
   IpcArgs,
   IpcChannel,
+  IpcInputs,
   IpcResults,
   Positions,
 } from '../../shared/ipc-contract';
@@ -28,6 +29,10 @@ export const api = {
   },
   schema: {
     load: () => call('schema.load'),
+  },
+  expr: {
+    normalize: (request: IpcInputs['expr.normalize']) =>
+      call('expr.normalize', request),
   },
   layout: {
     get: (dbKey: string, tableIds: string[]) =>
