@@ -955,3 +955,33 @@ What stays as it was: the messages under a field while it is filled in (the form
 The Toaster (`components/ui/sonner.tsx`) has `richColors` on, and each kind takes its colours from the ones the diff highlighting already uses in `main.css`: error is the red tint with `--destructive`, success the green tint with `--added`, warning the amber tint with `--modified`. The text is darkened by mixing it with `--foreground` (45–75 %), since the plain amber and green read poorly on their own tint. Info and the plain toast keep the popover colours, as asked. No colour is written in the component; they are all variables.
 
 **Rationale:** one set of colours for "added", "modified" and "removed" everywhere, so a red toast and a removed row are the same red. Checked by screenshots of each kind in the built app.
+
+## Expression input with live normalization (M10)
+
+**Date & time:** 2026-10-30 13:30
+
+`editors/ExpressionInput` is an input for a SQL expression (a default now, a check later). Its hook asks `expr.normalize` 400 ms after the last key, and shows Postgres' own error under the input, and, when the canonical text is not what was typed, "Stored as …". It hands each answer (a cached one too) to `onAnswer`. An empty input asks nothing. A request that fails (no database open) says "Couldn't check the expression: …" and is asked again the next time. The renderer's `api` has `expr.normalize`.
+
+Answers are cached by request in `normalize-cache.ts` (`normalize` for anything that needs one, `cachedAnswer` to look): the key is the fingerprint of the loaded schema, the expression, what it is for and every column of the table, so another table or column is another request, and nothing outlives a reload of the database. A request in flight is shared, so the same thing asked twice at once is asked once; a failed one is not remembered. The first `raw` answer (a role that can't create temporary tables) sets `normalizationFallback` in the UI store, for the check editor to read (M14), and shows one warning toast that stays.
+
+**Rationale:** the plan's M10 test: errors inline, one request 400 ms after typing stops, cached results not asked again. Errors of an expression are inline because they belong to the input, as the form's field errors do.
+
+## Default popover (M11)
+
+**Date & time:** 2026-10-30 13:30
+
+The default of a column is a chip (`editors/DefaultPopover/`) that opens a popover with three tabs: presets for the type (`presets.ts`: `0` for numbers, `false` and `true`, `''` for text, `gen_random_uuid()`, `now()` for timestamps, `CURRENT_DATE`, `LOCALTIME`/`CURRENT_TIME`, `'{}'` and `'[]'` for json, `'{}'` for any array, and the labels of an enum), a constant (quoted for any type but numbers and booleans) and any expression (typed in an `ExpressionInput`; Set default is on once Postgres has read it). Whatever is chosen goes through the same normalizer, so it is stored the way Postgres reads it back (`'banned'::public.user_status`) and a default put back as it was is not a change (the e2e test takes `now()` off `created_at` and puts it back, and the count is 0). Postgres rejecting it is said in the popover and nothing is set. "Remove default" clears it. A column with no default shows a faint "+ default" chip while its row is hovered or has focus; an identity column shows nothing, since it can't have one, and a read-only column shows its default as plain text.
+
+The chip's open state is the UI store's `editing` (`<column id>:default`), like the type picker, so a click on the empty canvas closes it. Because a chip is now something to click, the node is wider (360 px, was 300) and a default keeps at least 3.5 rem for itself, with the type giving way first; before that a row with a long type left the chip 18 px wide.
+
+**Rationale:** the plan's M11. Presets are the ones that make sense for the type; there is no list for types such as `inet`, which take a constant or an expression.
+
+## Foreign keys by dragging, and their popover (M12)
+
+**Date & time:** 2026-10-30 13:30
+
+A line can be dragged from the edge of one row to the edge of another, in any table, including the same one. The handles of a row are connectable (React Flow in loose mode, so it doesn't matter which of the four handles is used), except in a removed row and in compact nodes. The key belongs to the row the drag started from, and points at the one it ended on (`onConnectStart` keeps the start, since React Flow calls the source whichever handle kind a drag begins at). `connectColumns` makes it with `addForeignKey`, and if the model can't have it (the other column is not a key, the types differ…) takes it away again and shows the validation message as a toast; a column or table that is read-only can't start a key, but can be pointed at.
+
+A click on a line opens `editors/FkPopover.tsx` where it was clicked: the key (`invoices.user_id → users.id`), what happens on delete and on update (shadcn `Select`: no action, restrict, cascade, set null, set default), and Remove. For a key the change drops it offers Restore instead (which M8 left for here), and for a read-only key it says why and offers nothing. Changing the action of a key that is in the database is a drop and an add in the diff (two changes), which the e2e test checks. Its open state is `editing` = `<key id>:fk` again, with the position of the click kept by the canvas.
+
+**Rationale:** the plan's M12, with the validation done on the new key instead of leaving an invalid one that no node shows until M17.
