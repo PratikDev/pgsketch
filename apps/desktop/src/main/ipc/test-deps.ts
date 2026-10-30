@@ -2,9 +2,11 @@ import { vi } from 'vitest';
 import type { IpcEvent } from '../../shared/ipc-contract';
 import { createSession } from '../session';
 import type { ServerConnection } from '../services/connection';
+import type { Poller } from '../services/poller';
 import { createSecrets, type SafeStorageLike } from '../services/secrets';
 import { openAppDb } from '../store/db';
 import { createConnectionsRepo } from '../store/connections';
+import { createDraftsRepo } from '../store/drafts';
 import { createLayoutsRepo } from '../store/layouts';
 import type { IpcDeps } from './deps';
 
@@ -22,6 +24,12 @@ export function fakeServerConnection(
     close: vi.fn(async () => undefined),
   };
 }
+
+/** A poller that looks at nothing. */
+export const fakePoller = (): Poller => ({
+  ready: Promise.resolve(),
+  stop: vi.fn(),
+});
 
 /** A keyring that "encrypts" by reversing the bytes, with the backend to choose. */
 export function fakeSafeStorage(
@@ -44,6 +52,7 @@ export function testDeps(over: Partial<IpcDeps> = {}) {
   const deps: IpcDeps = {
     connections: createConnectionsRepo(db),
     layouts: createLayoutsRepo(db),
+    drafts: createDraftsRepo(db),
     secrets: createSecrets(fakeSafeStorage(), () => true),
     session: createSession(),
     emit: (event, ...payload) => {
@@ -54,6 +63,8 @@ export function testDeps(over: Partial<IpcDeps> = {}) {
       ...fakeServerConnection(),
       rolledBack: (work) => work(async () => []),
     }),
+    // so far apart that no test sees one
+    pollMs: 3_600_000,
     osUser: 'tester',
     socketPath: '/var/run/postgresql',
     ...over,

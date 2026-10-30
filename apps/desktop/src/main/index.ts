@@ -10,9 +10,11 @@ import { createLogger, fileSink } from './log';
 import { resolveAppPaths } from './paths';
 import { createSession } from './session';
 import { openConnection } from './services/connection';
+import { POLL_INTERVAL_MS } from './services/poller';
 import { openTaskConnection } from './services/task-connection';
 import { createSecrets } from './services/secrets';
 import { createConnectionsRepo } from './store/connections';
+import { createDraftsRepo } from './store/drafts';
 import { createLayoutsRepo } from './store/layouts';
 import { openAppDb } from './store/db';
 
@@ -92,11 +94,13 @@ if (!app.requestSingleInstanceLock()) {
     registerAllIpc(ipcMain, {
       connections: createConnectionsRepo(db),
       layouts: createLayoutsRepo(db),
+      drafts: createDraftsRepo(db),
       secrets: createSecrets(safeStorage, () => app.isReady()),
       session,
       emit,
       open: openConnection,
       openTask: openTaskConnection,
+      pollMs: POLL_INTERVAL_MS,
       osUser: userInfo().username,
       socketPath: '/var/run/postgresql',
     });

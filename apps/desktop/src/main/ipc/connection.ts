@@ -3,9 +3,11 @@ import type {
   OpenResult,
   SessionInfo,
 } from '../../shared/ipc-contract';
+import { fingerprint } from '@pgsketch/core';
 import { redact } from '../log';
 import { ConnectionError } from '../services/errors';
 import { createNormalizer } from '../services/normalizer';
+import { startPoller } from '../services/poller';
 import { SecretsUnavailableError } from '../services/secrets';
 import {
   dbKeyFor,
@@ -25,7 +27,7 @@ const messageOf = (error: unknown): string =>
     : redact(error instanceof Error ? error.message : String(error));
 
 export function registerConnection(ipc: IpcRegistry, deps: IpcDeps): void {
-  const { connections, layouts, secrets, session, emit } = deps;
+  const { connections, layouts, drafts, secrets, session, emit } = deps;
 
   /**
    * Connects, makes it the window's open database (closing the one it replaces) and describes it.
@@ -56,7 +58,13 @@ export function registerConnection(ipc: IpcRegistry, deps: IpcDeps): void {
       const normalizer = createNormalizer((onLost) =>
         deps.openTask(params, { onLost }),
       );
-      await session.replace({ connection, normalizer, info });
+      // and the database is looked at for changes made from outside
+      const poller = startPoller(
+        () => fingerprint(connection.query),
+        () => emit('schema:changed'),
+        deps.pollMs,
+      );
+      await session.replace({ connection, normalizer, poller, info });
       return info;
     } catch (error) {
       await connection.close().catch(() => undefined);
@@ -143,5 +151,6 @@ export function registerConnection(ipc: IpcRegistry, deps: IpcDeps): void {
     connections.remove(connectionId);
     // what was saved about its databases goes with it
     layouts.removeForConnection(connectionId);
+    drafts.removeForConnection(connectionId);
   });
 }
