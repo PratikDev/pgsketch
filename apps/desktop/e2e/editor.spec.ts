@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { Client } from 'pg';
 import type { TestServer } from '../test/postgres';
 import { launchApp } from './app';
 import { connectThroughForm } from './form';
@@ -870,6 +871,290 @@ test('a click on a foreign key line opens its popover: changing ON DELETE drops 
     window.locator('.react-flow__edge g[data-removed="true"]'),
   ).toHaveCount(0);
   await app.close();
+});
+
+test('an index is added from the toolbar on the columns picked, named from them; a name that clashes shows as an error on the table', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  const table = window.getByRole('region', { name: 'billing.line_items' });
+  await expect(
+    table.getByRole('button', { name: 'Indexes and checks' }),
+  ).toHaveText('0 indexes · 0 checks');
+
+  await table.locator('header').click();
+  await window.getByRole('button', { name: 'Add index' }).click();
+  const editor = table.getByRole('group', { name: 'New index' });
+  await editor.getByRole('button', { name: 'invoice_id' }).click();
+  await editor.getByRole('button', { name: 'issued' }).click();
+  await editor.getByRole('checkbox', { name: 'Unique' }).click();
+  await editor.getByRole('button', { name: 'Add index' }).click();
+
+  const indexes = table
+    .getByRole('list', { name: 'Indexes' })
+    .getByRole('listitem');
+  await expect(indexes).toHaveCount(1);
+  await expect(indexes).toContainText('line_items_invoice_id_issued_idx');
+  await expect(indexes).toContainText('(invoice_id, issued)');
+  await expect(indexes).toContainText('UQ');
+  await expect(indexes).toHaveAttribute('data-status', 'added');
+  await expect(
+    table.getByRole('button', { name: 'Indexes and checks' }),
+  ).toHaveText('1 index · 0 checks');
+  await expect(window.getByText('1 change', { exact: true })).toBeVisible();
+
+  // an index is named in the same namespace as the tables of its schema
+  await indexes
+    .getByRole('button', {
+      name: 'line_items_invoice_id_issued_idx',
+      exact: true,
+    })
+    .click();
+  await window.keyboard.type('invoices');
+  await window.keyboard.press('Enter');
+  await expect(table).toHaveAttribute('aria-invalid', 'true');
+  await expect(indexes).toHaveAttribute('aria-invalid', 'true');
+  await expect(table).toHaveAttribute('title', /invoices/);
+
+  // and a name that doesn't clash takes the error away
+  await indexes.getByRole('button', { name: 'invoices', exact: true }).click();
+  await window.keyboard.type('by_invoice');
+  await window.keyboard.press('Enter');
+  await expect(table).not.toHaveAttribute('aria-invalid');
+
+  // deleted, a new index is gone; there is nothing to restore
+  await indexes
+    .getByRole('button', { name: 'Delete index by_invoice' })
+    .click();
+  await expect(indexes).toHaveCount(0);
+  await expect(window.getByText('0 changes', { exact: true })).toBeVisible();
+  await app.close();
+});
+
+test('a check is added from the footer, read by Postgres, and named from the columns it uses', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  const table = window.getByRole('region', { name: 'billing.line_items' });
+  await table.locator('header').click();
+  await window.getByRole('button', { name: 'Add check' }).click();
+  const editor = table.getByRole('group', { name: 'New check' });
+  const input = editor.getByRole('textbox', { name: 'Check expression' });
+
+  // Postgres's own message, under the input
+  await input.fill('nonsense(');
+  await expect(editor.getByRole('alert')).toContainText('syntax error', {
+    timeout: 5000,
+  });
+  await expect(
+    editor.getByRole('button', { name: 'Add check' }),
+  ).toBeDisabled();
+
+  // a check on two columns is named for the table alone
+  await input.fill('invoice_id > 0 AND issued IS NOT NULL');
+  await expect(editor.getByRole('button', { name: 'Add check' })).toBeEnabled({
+    timeout: 5000,
+  });
+  await editor.getByRole('button', { name: 'Add check' }).click();
+  const checks = table
+    .getByRole('list', { name: 'Constraints' })
+    .getByRole('listitem');
+  await expect(checks).toHaveCount(1);
+  await expect(checks).toContainText('line_items_check');
+  await expect(checks).toHaveAttribute('data-status', 'added');
+  await expect(window.getByText('1 change', { exact: true })).toBeVisible();
+
+  // on one column, named for it
+  await table.locator('header').click();
+  await window.getByRole('button', { name: 'Add check' }).click();
+  await editor
+    .getByRole('textbox', { name: 'Check expression' })
+    .fill("label <> ''");
+  await expect(editor.getByRole('button', { name: 'Add check' })).toBeEnabled({
+    timeout: 5000,
+  });
+  await editor.getByRole('button', { name: 'Add check' }).click();
+  await expect(checks).toHaveCount(2);
+  await expect(
+    checks.filter({ hasText: 'line_items_label_check' }),
+  ).toHaveCount(1);
+  await app.close();
+});
+
+test('a comment is put on a column and on a table, each a change, and shows on hover', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  const table = window.getByRole('region', { name: 'billing.line_items' });
+  const label = rowOf(window, 'billing.line_items', 'label');
+  await label.hover();
+  await label.getByRole('button', { name: 'Column actions' }).click();
+  await window.getByRole('menuitem', { name: 'Comment…' }).click();
+  await window
+    .getByRole('textbox', { name: 'Comment' })
+    .fill('What it says on the invoice');
+  await window.getByRole('button', { name: 'Save' }).click();
+  await expect(label).toHaveAttribute('data-status', 'modified');
+  await expect(label.getByRole('button', { name: 'Comment' })).toHaveAttribute(
+    'title',
+    'What it says on the invoice',
+  );
+  await expect(window.getByText('1 change', { exact: true })).toBeVisible();
+
+  await table.locator('header').click();
+  await window
+    .getByRole('toolbar')
+    .getByRole('button', { name: 'Comment' })
+    .click();
+  await window
+    .getByRole('textbox', { name: 'Comment' })
+    .fill('Lines of an invoice');
+  await window.getByRole('button', { name: 'Save' }).click();
+  await expect(window.getByText('2 changes', { exact: true })).toBeVisible();
+  await expect(
+    table.locator('header').getByRole('button', { name: 'Comment' }),
+  ).toHaveAttribute('title', 'Lines of an invoice');
+
+  // saving nothing takes it away again
+  await label.getByRole('button', { name: 'Comment' }).click();
+  await window.getByRole('textbox', { name: 'Comment' }).fill('');
+  await window.getByRole('button', { name: 'Save' }).click();
+  await expect(label).not.toHaveAttribute('data-status');
+  await expect(window.getByText('1 change', { exact: true })).toBeVisible();
+  await app.close();
+});
+
+/** A second server, with a table made of what pgsketch can't edit: a generated column and an exclusion constraint. */
+async function startServerWithReadOnly(): Promise<TestServer> {
+  const extra = await startE2eServer();
+  await extra.admin.query(readFileSync(FIXTURE, 'utf8'));
+  await extra.admin.query(`CREATE TABLE public.rooms (
+    id integer PRIMARY KEY,
+    slot integer,
+    doubled integer GENERATED ALWAYS AS (slot * 2) STORED,
+    EXCLUDE USING btree (slot WITH =)
+  )`);
+  return extra;
+}
+
+test('what pgsketch does not edit is shown with a lock and its reason, with nothing to change it; what depends on a table is counted', async () => {
+  test.setTimeout(120_000);
+  const extra = await startServerWithReadOnly();
+  try {
+    const { app, window } = await launchApp();
+    await connectThroughForm(window, extra, E2E_PASSWORD);
+    await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+
+    // a generated column: a lock, its reason on hover, and none of the controls of a row
+    await showTable(window, 'public.rooms');
+    const rooms = window.getByRole('region', { name: 'public.rooms' });
+    const doubled = rooms.getByRole('listitem').filter({ hasText: 'doubled' });
+    await expect(doubled.getByLabel('Read-only')).toBeVisible();
+    await expect(doubled).toHaveAttribute('title', /generated column/);
+    // its name and type are text, it has no menu, and its switches are off
+    await expect(doubled.getByRole('button', { name: 'doubled' })).toHaveCount(
+      0,
+    );
+    await expect(
+      doubled.getByRole('button', { name: 'Column type' }),
+    ).toHaveCount(0);
+    await expect(
+      doubled.getByRole('button', { name: 'Column actions' }),
+    ).toHaveCount(0);
+    for (const button of await doubled.getByRole('button').all())
+      await expect(button).toBeDisabled();
+
+    // an exclusion constraint, in the footer
+    await rooms.getByRole('button', { name: 'Indexes and checks' }).click();
+    const exclusion = rooms
+      .getByRole('list', { name: 'Constraints' })
+      .getByRole('listitem');
+    await expect(exclusion).toHaveCount(1);
+    await expect(exclusion.getByLabel('Read-only')).toBeVisible();
+    await expect(exclusion).toHaveAttribute('title', /exclusion constraint/);
+    await expect(exclusion.getByRole('button')).toHaveCount(0);
+
+    // a partial index, and the view on the table
+    await showTable(window, 'billing.invoices');
+    const invoices = window.getByRole('region', { name: 'billing.invoices' });
+    await expect(invoices.getByText('1 view')).toHaveAttribute(
+      'title',
+      'view open_invoices',
+    );
+    await invoices.getByRole('button', { name: 'Indexes and checks' }).click();
+    const partial = invoices
+      .getByRole('list', { name: 'Indexes' })
+      .getByRole('listitem')
+      .filter({ hasText: 'invoices_open_idx' });
+    await expect(partial.getByLabel('Read-only')).toBeVisible();
+    await expect(partial).toHaveAttribute('title', /partial index/);
+    await expect(partial.getByRole('button')).toHaveCount(0);
+    // the plain index beside it is not locked
+    await expect(
+      invoices.getByRole('button', {
+        name: 'Delete index invoices_user_id_idx',
+      }),
+    ).toBeVisible();
+    await expect(window.getByText('0 changes', { exact: true })).toBeVisible();
+    await app.close();
+  } finally {
+    await extra.stop();
+  }
+});
+
+test("when the role can't create temporary tables, the first default says so, and no check can be added", async () => {
+  test.setTimeout(120_000);
+  const extra = await startE2eServer();
+  const name = 'notemp';
+  try {
+    await extra.admin.query(`CREATE DATABASE ${name}`);
+    await extra.admin.query(`REVOKE TEMPORARY ON DATABASE ${name} FROM PUBLIC`);
+    const inside = new Client({
+      host: extra.host,
+      port: extra.port,
+      user: extra.user,
+      password: extra.password,
+      database: name,
+    });
+    await inside.connect();
+    await inside.query(
+      'CREATE TABLE public.notes (id integer PRIMARY KEY, body text)',
+    );
+    await inside.end();
+
+    const { app, window } = await launchApp();
+    await connectThroughForm(
+      window,
+      { ...extra, database: name },
+      E2E_PASSWORD,
+    );
+    await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await showTable(window, 'public.notes');
+    const notes = window.getByRole('region', { name: 'public.notes' });
+    const body = rowOf(window, 'public.notes', 'body');
+
+    // a constant is kept as typed, and the app says expressions can't be read
+    await body.hover();
+    await body.getByRole('button', { name: 'Add a default' }).click();
+    await window.getByRole('tab', { name: 'Constant' }).click();
+    await window.getByRole('textbox', { name: 'Constant' }).fill('none');
+    await window.getByRole('button', { name: 'Set default' }).click();
+    await expect(body.getByRole('button', { name: /^Default/ })).toHaveText(
+      "= 'none'",
+    );
+    await expect(window.locator('[data-sonner-toast]')).toContainText(
+      'temporary tables',
+    );
+
+    // and a check can't be added: the editor says why
+    await notes.locator('header').click();
+    await window.getByRole('button', { name: 'Add check' }).click();
+    const editor = notes.getByRole('group', { name: 'New check' });
+    await expect(editor.getByRole('alert')).toContainText(
+      "can't create temporary tables",
+    );
+    await expect(editor.getByRole('textbox')).toHaveCount(0);
+    await expect(
+      editor.getByRole('button', { name: 'Add check' }),
+    ).toBeDisabled();
+    await app.close();
+  } finally {
+    await extra.stop();
+  }
 });
 
 test('a new table goes in the one schema the filter leaves showing', async () => {
