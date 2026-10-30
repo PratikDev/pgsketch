@@ -1015,3 +1015,35 @@ What pgsketch doesn't edit has a lock (`LockIcon`) and the reason on hover, as t
 An error on an index or a constraint of a table is an error on the table too: its node is outlined (`aria-invalid`) with the message on hover, and the entry in the footer that has it is outlined too. The e2e test names a new index `invoices`, which clashes with the table of that name in the same schema, and sees both; renaming it again takes them away.
 
 **Rationale:** the plan's M16 and M17. Putting a child's error on the table means a collapsed footer can't hide it.
+
+## Drafts repository and channels (N1)
+
+**Date & time:** 2026-10-31 10:10
+
+`store/drafts.ts` keeps one draft for each database (`dbKey`) in the app database's `drafts` table: the edited schema as JSON text the main process never reads, the fingerprint it was made on, and when. `put` replaces the draft, `clear` removes it, `removeForConnection` removes those of every database opened through a saved connection (the keys start with the connection's id; `%` and `_` in it are escaped, as for layouts). `ipc/drafts.ts` is `draft.get`, `draft.put` and `draft.clear`, their input checked by the contract, which refuses an empty fingerprint or text. `connection.forget` deletes the drafts with the layouts. A draft of an unsaved connection is under its hash key, which is the same on every start.
+
+**Rationale:** the plan's N1; written like the layouts repository, so the two work the same.
+
+## Fingerprint poller (N2)
+
+**Date & time:** 2026-10-31 10:10
+
+`services/poller.ts` (`startPoller`) reads the fingerprint of the open database every 3 s (`POLL_INTERVAL_MS`) and calls `onChange` once for each change from the one before; the first reading is only remembered. Readings never overlap (the next is timed from the end of the last), one that fails is skipped, and the timer doesn't keep the app from quitting. A change that is made and undone between two readings isn't seen, which is fine: the poller only says when to look. The session starts one when a database is opened (`ActiveSession.poller`, stopped when the session is replaced, closed or lost), and it emits `schema:changed`; `IpcDeps.pollMs` lets tests choose how often.
+
+`schema.fingerprint` reads it from the database now, on the main connection, and is not what the poller last saw: a script or a draft is checked against the fingerprint of the moment, as the plan says, so correctness never depends on poll timing.
+
+The DB test (Postgres 16; 14 and 18 too) has an `ALTER TABLE` from outside give exactly one event within seconds and none after, `ANALYZE`, `VACUUM`, `VACUUM FULL`, `TRUNCATE` and writes give none, and a table dropped and made again as it was give one (the fingerprint has OIDs). An e2e test sees the event reach the renderer once, and none for `ANALYZE`.
+
+**Rationale:** the plan's N2.
+
+## Saving and restoring edits (N3)
+
+**Date & time:** 2026-10-31 10:10
+
+`stores/persistence.ts` watches the edited schema of the open database and, a second after the last edit, saves it with the fingerprint it was loaded with; when the edits have come to nothing (the diff has no operations) it clears the draft instead, so undoing everything leaves nothing to restore. It saves what is left when the Editor goes (disconnecting) and before the window unloads. A save that fails is tried again with the next edit or flush. Nothing is saved before the first edit, and a schema loaded again (which has no edits) clears the draft.
+
+On opening, `useLoadSchema` asks for the draft after the schema is loaded, and `restoreDraft` (`stores/draft-restore.ts`) gives it back only if it was made on the schema that has just been loaded, that is, the same fingerprint, which has every OID in it, and if every object in it that has an id from the database (`t:16394`, `c:16394:2`…) is in the loaded schema; objects made in the editor have random ids, and are not looked for. It also checks that the text is a schema model. Anything else is thrown away (`draft.clear`) with a toast that stays: "Your unsaved edits were not restored: the database changed since they were made." A draft that can't be asked for doesn't keep the database from opening. The positions of the tables of a restored draft are restored too, since the layout is asked for with the ids of the tables of the edited schema, not only the loaded one.
+
+This is the plain discard of the plan's N3; N4's change handler replaces it with "Changes applied" when the database now matches the edits.
+
+**Rationale:** the plan's N3. The e2e tests restart the app on the same data folder and see the edit again; undoing it leaves nothing for the next start; and dropping and making a table again while the app is closed, as a dump and restore does, leaves the draft thrown away, with the notice, and gone for next time.
