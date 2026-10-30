@@ -932,3 +932,26 @@ A removed foreign key can't be restored on its own by clicking its line: that co
 The answer is core's: `normalized` with the text (and, for a check, the columns it uses in the order Postgres stores them), `invalid` with Postgres' own message, or `raw` with the text as typed when the role can't create temporary tables or the session is read-only. Core now exports `quoteIdent` and `quoteLiteral` (the DB test needed them).
 
 **Rationale:** the plan's "one reused task connection per window (closed after 30 s idle)". Tying it to the session means Disconnect closes it at once instead of leaving a connection for 30 s. The DB test (Postgres 14, 16 and 18) covers a default, a check's columns, an error, six requests at once on one connection, the idle close and a role without TEMP; unit tests cover the sharing, queueing, timer and failure cases; an e2e test calls the channel through the preload bridge and sees two backends.
+
+## Errors are shown as toasts
+
+**Date & time:** 2026-10-29 21:30
+
+Everything the app tells the user went wrong is an error toast from `sonner` (the shadcn `Sonner` component, with its `Toaster` in `main.tsx`), instead of a banner or text in the page. What was changed:
+
+- **Refusals of an edit** (a column or table something depends on, a schema with a table in it, a table that can't move, a schema in the database): the store actions return the reason, and `showRefusal` (`lib/refusal.ts`) shows it. The message is the toast's id, so the same refusal again shows one toast, not a pile. The `notice` in the UI store and its bar under the top bar are gone.
+- **A type the store refuses** (an identity column that has to stay an integer): a toast; the picker stays open and the column keeps its type. The red text inside the popover is gone.
+- **A schema that can't be loaded**: a toast that stays (`id: 'load-failed'`, no time limit) until the Editor goes, which dismisses it. The red banner in the Editor is gone; Disconnect is still in the bar.
+- **A connection that fails to open** (and a saved one that fails): a toast with the message. The red alert in the Connect form is gone, and so is the form error it was kept in; the form is no longer marked invalid by a server failure, so it can be tried again straight away.
+
+What stays as it was: the messages under a field while it is filled in (the form's validation, like "Enter a host"), which belong to the field; the red outline and hover text of a table or column with a validation error, which the plan puts on the node (M17); and the note that the password was not saved, which is a notice and not an error.
+
+**Rationale:** one place and one look for everything that goes wrong. A toast also stays out of the way of the canvas, unlike the bar that moved it down.
+
+## Toast colours
+
+**Date & time:** 2026-10-30 09:40
+
+The Toaster (`components/ui/sonner.tsx`) has `richColors` on, and each kind takes its colours from the ones the diff highlighting already uses in `main.css`: error is the red tint with `--destructive`, success the green tint with `--added`, warning the amber tint with `--modified`. The text is darkened by mixing it with `--foreground` (45–75 %), since the plain amber and green read poorly on their own tint. Info and the plain toast keep the popover colours, as asked. No colour is written in the component; they are all variables.
+
+**Rationale:** one set of colours for "added", "modified" and "removed" everywhere, so a red toast and a removed row are the same red. Checked by screenshots of each kind in the built app.
