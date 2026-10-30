@@ -26,6 +26,8 @@ export interface CoreSlice {
   version: number;
   /** Replaces everything with a freshly loaded schema and no edits. */
   load: (introspection: Introspection) => void;
+  /** Puts the edits of an earlier session back on the loaded schema. */
+  restore: (desired: SchemaModel) => void;
   markStale: () => void;
   /**
    * Changes a copy of `desired` and makes it the new one. A copy per edit keeps every model the
@@ -55,6 +57,7 @@ export const createCoreSlice: StateCreator<SchemaStore, [], [], CoreSlice> = (
       stale: false,
       version: 0,
     }),
+  restore: (desired) => set((s) => ({ desired, version: s.version + 1 })),
   markStale: () => set({ stale: true }),
   edit: (change) => {
     const desired = structuredClone(get().desired);

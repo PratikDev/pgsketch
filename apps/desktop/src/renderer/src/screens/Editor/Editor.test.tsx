@@ -1,17 +1,19 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { act } from 'react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { toast } from 'sonner';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { emptyModel } from '@/stores/schema/core';
 import { schemaStore } from '@/stores/schema';
 import { installFakeApi } from '@/test-utils';
 import { fixtureModel } from '@/test-model';
 import type { SessionInfo } from '../../../../shared/ipc-contract';
 import { Editor } from '.';
-import { toast } from 'sonner';
 
 // toasts are drawn by the Toaster, which these tests don't mount: they check what was asked of `toast`
-vi.mock('sonner', () => ({ toast: { error: vi.fn(), dismiss: vi.fn() } }));
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), info: vi.fn(), dismiss: vi.fn() },
+}));
 
 const session: SessionInfo = {
   serverVersion: '16.4',
@@ -23,6 +25,7 @@ const session: SessionInfo = {
 };
 const casts = { categories: {}, domains: {}, casts: {} };
 
+beforeEach(() => vi.mocked(toast.info).mockClear());
 afterEach(() =>
   act(() =>
     schemaStore
@@ -94,5 +97,110 @@ describe('Editor', () => {
     expect(screen.getByText('app')).toBeInTheDocument();
     expect(screen.getByText(/no keyring/)).toBeInTheDocument();
     await screen.findByText(/Connected to/);
+  });
+
+  describe('the edits of the last time', () => {
+    const edited = () => {
+      const model = structuredClone(fixtureModel);
+      model.tables['t:10']!.name = 'people';
+      return model;
+    };
+    const load = (draft: { fingerprint: string; desiredJson: string } | null) =>
+      installFakeApi({
+        'schema.load': () => ({
+          model: fixtureModel,
+          casts,
+          fingerprint: 'fp',
+        }),
+        'draft.get': () => draft,
+        'draft.clear': () => undefined,
+        'draft.put': () => undefined,
+        'layout.get': () => ({}),
+        'layout.put': () => undefined,
+      });
+
+    test('are put back on the schema that was loaded, when they were made on that very schema', async () => {
+      const calls = load({
+        fingerprint: 'fp',
+        desiredJson: JSON.stringify(edited()),
+      });
+      render(<Editor session={session} onDisconnect={vi.fn()} />);
+      await waitFor(() =>
+        expect(schemaStore.getState().desired.tables['t:10']!.name).toBe(
+          'people',
+        ),
+      );
+      expect(schemaStore.getState().baseline.tables['t:10']!.name).toBe(
+        'users',
+      );
+      expect(calls.filter((c) => c.channel === 'draft.clear')).toHaveLength(0);
+      expect(toast.info).not.toHaveBeenCalled();
+    });
+
+    test('are thrown away, with a notice, when the database is not as it was', async () => {
+      const calls = load({
+        fingerprint: 'earlier',
+        desiredJson: JSON.stringify(edited()),
+      });
+      render(<Editor session={session} onDisconnect={vi.fn()} />);
+      await waitFor(() =>
+        expect(toast.info).toHaveBeenCalledWith(
+          expect.stringContaining('not restored'),
+          expect.anything(),
+        ),
+      );
+      expect(schemaStore.getState().desired.tables['t:10']!.name).toBe('users');
+      expect(calls.filter((c) => c.channel === 'draft.clear')).toHaveLength(1);
+    });
+
+    test('that cannot be read are thrown away as well', async () => {
+      const calls = load({ fingerprint: 'fp', desiredJson: 'not json' });
+      render(<Editor session={session} onDisconnect={vi.fn()} />);
+      await waitFor(() => expect(toast.info).toHaveBeenCalled());
+      expect(calls.filter((c) => c.channel === 'draft.clear')).toHaveLength(1);
+    });
+
+    test('are no reason to keep the schema from opening when they cannot be asked for', async () => {
+      installFakeApi({
+        'schema.load': () => ({
+          model: fixtureModel,
+          casts,
+          fingerprint: 'fp',
+        }),
+        'layout.get': () => ({}),
+      });
+      const { container } = render(
+        <Editor session={session} onDisconnect={vi.fn()} />,
+      );
+      await waitFor(() =>
+        expect(container.querySelector('.react-flow')).toBeInTheDocument(),
+      );
+    });
+
+    test('are saved as they are made, and what is left is saved when the Editor goes', async () => {
+      const calls = load(null);
+      const { unmount } = render(
+        <Editor session={session} onDisconnect={vi.fn()} />,
+      );
+      await waitFor(() =>
+        expect(schemaStore.getState().loadedFingerprint).toBe('fp'),
+      );
+      await waitFor(() =>
+        expect(
+          screen.queryByText('Loading the schema…'),
+        ).not.toBeInTheDocument(),
+      );
+      act(() => schemaStore.getState().renameTable('t:10', 'people'));
+      expect(calls.filter((c) => c.channel === 'draft.put')).toHaveLength(0);
+      unmount();
+      await waitFor(() =>
+        expect(calls.filter((c) => c.channel === 'draft.put')).toHaveLength(1),
+      );
+      const put = calls.find((c) => c.channel === 'draft.put')!;
+      expect(put.args[0]).toMatchObject({
+        dbKey: 'k',
+        draft: { fingerprint: 'fp' },
+      });
+    });
   });
 });

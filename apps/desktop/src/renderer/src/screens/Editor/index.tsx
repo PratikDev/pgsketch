@@ -6,6 +6,7 @@ import { Canvas } from '@/canvas/Canvas';
 import { ChangeCount } from '@/chrome/ChangeCount';
 import { SchemaFilter } from '@/chrome/SchemaFilter';
 import { layoutStore } from '@/stores/layout';
+import { persistence } from '@/stores/persistence';
 import type { SessionInfo } from '../../../../shared/ipc-contract';
 import { useLoadSchema } from './use-load-schema';
 
@@ -25,8 +26,19 @@ export function Editor({
     toast.error(message, { id: 'load-failed', duration: Infinity });
     return () => void toast.dismiss('load-failed');
   }, [load]);
-  // positions moved a moment ago are saved before the Editor goes
-  useEffect(() => () => void layoutStore.getState().flush(), []);
+  // what was moved or edited a moment ago is saved before the Editor goes, or the window closes
+  useEffect(() => {
+    const flush = () => {
+      void layoutStore.getState().flush();
+      void persistence.flush();
+    };
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      void layoutStore.getState().flush();
+      void persistence.stop();
+    };
+  }, []);
   return (
     <main className="flex h-screen flex-col">
       <header className="flex items-center gap-4 border-b border-border px-4 py-2">

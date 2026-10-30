@@ -1,5 +1,6 @@
 import type {
   ConnectionParams,
+  Draft,
   IpcArgs,
   IpcChannel,
   IpcInputs,
@@ -33,6 +34,11 @@ export const api = {
   expr: {
     normalize: (request: IpcInputs['expr.normalize']) =>
       call('expr.normalize', request),
+  },
+  draft: {
+    get: (dbKey: string) => call('draft.get', { dbKey }),
+    put: (dbKey: string, draft: Draft) => call('draft.put', { dbKey, draft }),
+    clear: (dbKey: string) => call('draft.clear', { dbKey }),
   },
   layout: {
     get: (dbKey: string, tableIds: string[]) =>
