@@ -4,6 +4,7 @@ import { act } from 'react';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { emptyModel } from '@/stores/schema/core';
+import { layoutStore } from '@/stores/layout';
 import { schemaStore } from '@/stores/schema';
 import { installFakeApi } from '@/test-utils';
 import { fixtureModel } from '@/test-model';
@@ -12,7 +13,7 @@ import { Editor } from '.';
 
 // toasts are drawn by the Toaster, which these tests don't mount: they check what was asked of `toast`
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn(), info: vi.fn(), dismiss: vi.fn() },
+  toast: { error: vi.fn(), info: vi.fn(), success: vi.fn(), dismiss: vi.fn() },
 }));
 
 const session: SessionInfo = {
@@ -25,7 +26,10 @@ const session: SessionInfo = {
 };
 const casts = { categories: {}, domains: {}, casts: {} };
 
-beforeEach(() => vi.mocked(toast.info).mockClear());
+beforeEach(() => {
+  vi.mocked(toast.info).mockClear();
+  vi.mocked(toast.success).mockClear();
+});
 afterEach(() =>
   act(() =>
     schemaStore
@@ -151,6 +155,54 @@ describe('Editor', () => {
       );
       expect(schemaStore.getState().desired.tables['t:10']!.name).toBe('users');
       expect(calls.filter((c) => c.channel === 'draft.clear')).toHaveLength(1);
+    });
+
+    test('that the database now has, since the SQL was run while the app was closed, are told so, and the tables keep their places', async () => {
+      // the draft made a table of its own id; the database has made it since, with another
+      const pending = structuredClone(fixtureModel);
+      pending.tables['uuid-tags'] = {
+        id: 'uuid-tags',
+        schemaId: 's:1',
+        name: 'tags',
+        comment: null,
+      };
+      const now = structuredClone(fixtureModel);
+      now.tables['t:900'] = {
+        id: 't:900',
+        schemaId: 's:1',
+        name: 'tags',
+        comment: null,
+      };
+      const calls = installFakeApi({
+        'schema.load': () => ({ model: now, casts, fingerprint: 'after' }),
+        'draft.get': () => ({
+          fingerprint: 'before',
+          desiredJson: JSON.stringify(pending),
+        }),
+        'draft.clear': () => undefined,
+        'layout.get': () => ({ 'uuid-tags': { x: 40, y: 50 } }),
+        'layout.put': () => undefined,
+      });
+      render(<Editor session={session} onDisconnect={vi.fn()} />);
+      await waitFor(() =>
+        expect(toast.success).toHaveBeenCalledWith('Changes applied'),
+      );
+      expect(toast.info).not.toHaveBeenCalled();
+      expect(calls.filter((c) => c.channel === 'draft.clear')).toHaveLength(1);
+      // nothing is left to change, and the schema is the one the database has
+      expect(schemaStore.getState().desired).toEqual(
+        schemaStore.getState().baseline,
+      );
+      // the layout was asked for with the ids of the draft's tables too, and moved to the new one
+      const asked = calls.find((c) => c.channel === 'layout.get')!.args[0] as {
+        tableIds: string[];
+      };
+      expect(asked.tableIds).toContain('uuid-tags');
+      await waitFor(() =>
+        expect(layoutStore.getState().positions).toEqual({
+          't:900': { x: 40, y: 50 },
+        }),
+      );
     });
 
     test('that cannot be read are thrown away as well', async () => {

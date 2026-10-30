@@ -4,11 +4,13 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Canvas } from '@/canvas/Canvas';
 import { ChangeCount } from '@/chrome/ChangeCount';
+import { StaleBanner } from '@/chrome/StaleBanner';
 import { SchemaFilter } from '@/chrome/SchemaFilter';
 import { layoutStore } from '@/stores/layout';
 import { persistence } from '@/stores/persistence';
 import type { SessionInfo } from '../../../../shared/ipc-contract';
 import { useLoadSchema } from './use-load-schema';
+import { useSchemaChanges } from './use-schema-changes';
 
 /** The open database: its tables on the canvas, under a slim bar until the real top bar is built. */
 export function Editor({
@@ -19,6 +21,7 @@ export function Editor({
   onDisconnect: () => void;
 }) {
   const load = useLoadSchema(session.dbKey);
+  const onSchemaChanged = useSchemaChanges(load.status === 'ready');
   // a schema that could not be read is said once, and stays until the Editor goes
   useEffect(() => {
     if (load.status !== 'failed') return;
@@ -63,6 +66,7 @@ export function Editor({
           </Button>
         </div>
       </header>
+      <StaleBanner onReconnected={() => void onSchemaChanged()} />
       <div className="min-h-0 flex-1">
         {load.status === 'loading' && (
           <p className="p-4 text-muted-foreground">Loading the schema…</p>
