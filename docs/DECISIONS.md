@@ -1047,3 +1047,33 @@ On opening, `useLoadSchema` asks for the draft after the schema is loaded, and `
 This is the plain discard of the plan's N3; N4's change handler replaces it with "Changes applied" when the database now matches the edits.
 
 **Rationale:** the plan's N3. The e2e tests restart the app on the same data folder and see the edit again; undoing it leaves nothing for the next start; and dropping and making a table again while the app is closed, as a dump and restore does, leaves the draft thrown away, with the notice, and gone for next time.
+
+## When the database changes under the open schema (N4)
+
+**Date & time:** 2026-10-31 15:20
+
+`stores/schema/change-handler.ts` (`createChangeHandler`) is the plan's `onSchemaChanged`. It reads the schema again (`schema.load`, changing nothing yet), waits if an input or popover is open, and then decides in one step from the edits as they are at that moment: the same fingerprint as was loaded is nothing to do (and makes a stale schema fine again); no edits take the new schema as it is (`adopt` in the core slice); edits that the database now has by name (core's `matchesByName`, against the edited schema with auto-names given) are taken as applied, with a "Changes applied" toast; any other edits mean the schema goes stale (`markStale`) and the edits are kept. Because the decision is made after the wait, never before, an edit made while the database was being read, or text committed from an input that was open, is part of what is compared: the edit is kept and the schema goes stale instead of being overwritten. If the read fails the schema goes stale too. Handlers run one at a time; a change that comes in meanwhile makes one more look afterwards. The edits of an applied schema are gone from the store, so the draft is cleared by the persistence that watches it.
+
+It runs when the main process says `schema:changed`, once when the Editor is ready if the fingerprint then differs from the loaded one (the poller may have spoken before the Editor listened), and after a reconnect. At session start the draft is classified (`classifyDraft`): restored when it fits, "Changes applied" when the database changed to what it asked for (the draft is cleared), and discarded with the notice otherwise, replacing N3's plain discard. `schema.fingerprint` and `onEvent` are in the renderer's `api`.
+
+**Rationale:** the plan's N4. The handler is a module of its own, not part of the store's core slice, to keep the slice to state; the slice has `adopt` and `clearStale`. Not decided: while stale, Generate SQL and Validate are to be disabled, which waits for the SQL panel (O); the flag `stale` is there for it.
+
+## Places of tables when the database makes them (N5)
+
+**Date & time:** 2026-10-31 15:20
+
+A table made in the editor has a random id and a saved position; when the database makes it, its id is the database's. `tableIdMap` (`stores/schema/table-remap.ts`) finds, by the names of the schema and the table, which table of the old model is which of the new, and `layoutStore.remap` moves each position to the new id and forgets the old one (a place already taken under the new id stays, and it is saved like a move). It runs when the handler adopts applied edits, and at session start for applied edits (where the layout is asked for with the ids of the draft's tables as well, or the pending ones would be pruned before they can be moved).
+
+Not remapped: schemas made in the editor are hidden or shown by id in the schema filter, and that is not carried over, so one that was hidden shows again.
+
+**Rationale:** the plan's N5; the e2e test checks a new table is at the same place after "Changes applied", with a database id, and after a restart.
+
+## Stale banner and reload (N6) and lost connection (N7)
+
+**Date & time:** 2026-10-31 15:20
+
+`chrome/StaleBanner.tsx` shows what can't be trusted as toasts that stay (`duration: Infinity`, `dismissible: false`, so they can be neither swiped away nor closed; the only ways out are their button and the trouble going by itself). Stale: a warning toast, "The database schema changed outside pgsketch.", with the button Reload, which does not close the toast but asks "Reload and discard N unsaved changes?" (a shadcn `Dialog`; N counts the operations); confirmed, it reads the schema and loads it, which drops the edits and the stale flag (the draft then clears by itself, and the toast goes with the flag); a read that fails says so in another toast and keeps the edits and the notice. Lost: an error toast, "The connection to the database was lost (reason). Your edits are kept.", with the button Reconnect (it says "Reconnecting…" while it works and a second press does nothing), which opens the database again and then lets the handler look at it, since it may have changed while it was down; the toast goes when the connection is back. Both go with the Editor. The component is still called a banner, since that is what the plan calls it.
+
+Detection was in `services/connection.ts` for errors; a server that stops can also close the connection with no error, so `end` counts as lost too (once, and never for a close the app asked for). `connection.reconnect` is a new channel: the main process keeps, in memory only, the parameters and saved-connection details of what was opened last, so an unsaved connection can be opened again without asking for the password; it is forgotten when the user disconnects. A reconnect that fails answers with the message and can be tried again. The e2e tests end the sessions with `pg_terminate_backend` (banner, reconnect, edits kept) and stop the container (banner, and Reconnect says it can't while it is down).
+
+**Rationale:** the plan's N6 and N7. The plan says "reconnect banner"; without the parameters in the main process it could only send the user back to the Connect screen.
