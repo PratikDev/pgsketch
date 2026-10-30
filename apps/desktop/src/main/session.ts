@@ -1,11 +1,14 @@
 import type { SessionInfo } from '../shared/ipc-contract';
 import type { ServerConnection } from './services/connection';
 import type { Normalizer } from './services/normalizer';
+import type { Poller } from './services/poller';
 
 export interface ActiveSession {
   connection: ServerConnection;
   /** Normalizes expressions on a connection of its own, which closes with the session. */
   normalizer: Normalizer;
+  /** Looks for changes made to the database from outside, until the session ends. */
+  poller: Poller;
   info: SessionInfo;
 }
 
@@ -15,6 +18,7 @@ async function closeSession(session: ActiveSession | null): Promise<void> {
     session?.connection.close().catch(() => undefined),
     session?.normalizer.close().catch(() => undefined),
   ]);
+  session?.poller.stop();
 }
 
 /** The one database a window has open, with its main connection. */
@@ -41,6 +45,7 @@ export function createSession() {
     lost(connection: ServerConnection): boolean {
       if (active?.connection !== connection) return false;
       void active.normalizer.close().catch(() => undefined);
+      active.poller.stop();
       active = null;
       return true;
     },

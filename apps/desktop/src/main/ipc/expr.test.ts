@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import type { NormalizedExpression } from '@pgsketch/core';
 import { fakeIpc } from './fake-ipc';
 import { registerExpr } from './expr';
-import { fakeServerConnection, testDeps } from './test-deps';
+import { fakePoller, fakeServerConnection, testDeps } from './test-deps';
 
 const input = {
   expression: "'active'",
@@ -35,6 +35,7 @@ describe('expr.normalize', () => {
     await deps.session.replace({
       connection: fakeServerConnection(),
       normalizer,
+      poller: fakePoller(),
       info: {
         serverVersion: '16',
         database: 'x',

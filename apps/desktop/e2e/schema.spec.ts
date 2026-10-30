@@ -126,3 +126,61 @@ test('asking to normalize with no database open is an error the renderer can rea
   expect(message).toContain('No database is open');
   await app.close();
 });
+
+test('schema.fingerprint is read from the database now, and is the one the load gave', async () => {
+  const { app, window } = await launchApp();
+  const params = {
+    kind: 'params',
+    host: server.host,
+    port: server.port,
+    user: E2E_USER,
+    password: E2E_PASSWORD,
+    database: server.database,
+    sslMode: 'disable',
+  };
+  await window.evaluate(
+    `window.api.invoke('connection.open', ${JSON.stringify({ params, remember: false })})`,
+  );
+  const loaded = await window.evaluate<Introspection>(
+    `window.api.invoke('schema.load')`,
+  );
+  const now = await window.evaluate<string>(
+    `window.api.invoke('schema.fingerprint')`,
+  );
+  expect(now).toBe(loaded.fingerprint);
+  await app.close();
+});
+
+test('a change made to the database from outside is told to the renderer once, within seconds, and ANALYZE is not one', async () => {
+  const { app, window } = await launchApp();
+  const params = {
+    kind: 'params',
+    host: server.host,
+    port: server.port,
+    user: E2E_USER,
+    password: E2E_PASSWORD,
+    database: server.database,
+    sslMode: 'disable',
+  };
+  await window.evaluate(
+    `window.api.invoke('connection.open', ${JSON.stringify({ params, remember: false })})`,
+  );
+  await window.evaluate(
+    `window.__changes = 0; window.api.on('schema:changed', () => { window.__changes += 1; })`,
+  );
+  const changes = () => window.evaluate<number>('window.__changes');
+
+  await server.admin.query('ANALYZE');
+  await window.waitForTimeout(4_000);
+  expect(await changes()).toBe(0);
+
+  await server.admin.query('CREATE TABLE public.poll_probe (id integer)');
+  try {
+    await expect.poll(changes, { timeout: 8_000 }).toBe(1);
+    await window.waitForTimeout(4_000);
+    expect(await changes()).toBe(1);
+  } finally {
+    await server.admin.query('DROP TABLE public.poll_probe');
+  }
+  await app.close();
+});

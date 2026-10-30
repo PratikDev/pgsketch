@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { startServer, type TestServer } from '../../../test/postgres';
 import { fakeIpc } from '../ipc/fake-ipc';
 import { registerSchema } from '../ipc/schema';
-import { testDeps } from '../ipc/test-deps';
+import { fakePoller, testDeps } from '../ipc/test-deps';
 import { openConnection, type ServerConnection } from './connection';
 import { loadSchema } from './introspector';
 import { createNormalizer } from './normalizer';
@@ -75,6 +75,7 @@ describe('loadSchema', () => {
     await deps.session.replace({
       connection,
       normalizer: createNormalizer(() => Promise.reject(new Error('unused'))),
+      poller: fakePoller(),
       info: {
         serverVersion: '16',
         database: 'x',

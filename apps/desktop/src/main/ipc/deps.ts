@@ -4,6 +4,7 @@ import type { openConnection } from '../services/connection';
 import type { Secrets } from '../services/secrets';
 import type { openTaskConnection } from '../services/task-connection';
 import type { ConnectionsRepo } from '../store/connections';
+import type { DraftsRepo } from '../store/drafts';
 import type { LayoutsRepo } from '../store/layouts';
 
 /** Sends an event to every window. */
@@ -16,6 +17,7 @@ export type EmitEvent = <E extends IpcEvent>(
 export interface IpcDeps {
   connections: ConnectionsRepo;
   layouts: LayoutsRepo;
+  drafts: DraftsRepo;
   secrets: Secrets;
   session: Session;
   emit: EmitEvent;
@@ -24,6 +26,8 @@ export interface IpcDeps {
   /** The way the connections for expression normalization are opened. */
   openTask: typeof openTaskConnection;
   /** The operating system user, for the local socket's default. */
+  /** How often the open database is looked at for changes from outside. */
+  pollMs: number;
   osUser: string;
   socketPath: string;
 }
