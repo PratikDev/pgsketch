@@ -1077,3 +1077,31 @@ Not remapped: schemas made in the editor are hidden or shown by id in the schema
 Detection was in `services/connection.ts` for errors; a server that stops can also close the connection with no error, so `end` counts as lost too (once, and never for a close the app asked for). `connection.reconnect` is a new channel: the main process keeps, in memory only, the parameters and saved-connection details of what was opened last, so an unsaved connection can be opened again without asking for the password; it is forgotten when the user disconnects. A reconnect that fails answers with the message and can be tried again. The e2e tests end the sessions with `pg_terminate_backend` (banner, reconnect, edits kept) and stop the container (banner, and Reconnect says it can't while it is down).
 
 **Rationale:** the plan's N6 and N7. The plan says "reconnect banner"; without the parameters in the main process it could only send the user back to the Connect screen.
+
+## The top bar (O1)
+
+**Date & time:** 2026-11-01 11:30
+
+`chrome/TopBar.tsx` replaces the slim bar: the database, its host and the Postgres version on the left (with an invisible "Editor" heading, which is what the app's screens and tests look for), and on the right the count of changes, the schema filter, **Reload**, **Auto-arrange**, **Generate SQL** and **Disconnect**. The count (`ChangeCount`) is "N changes" with a span for each kind of risk beside it ("· 1 destructive", "· 1 breaks app code"), so the plain count is still one piece of text of its own.
+
+Generate SQL is off, with the reason as the tooltip of the element around it (a disabled button has none of its own), while the schema is loading, the connection is lost, the schema is stale, an edit has an error (the first message is named), or there are no changes; `generateBlocker` (`chrome/generate-state.ts`) says which, in that order, and the SQL panel uses it too. Reload reloads at once when there are no edits and otherwise asks "Reload and discard N unsaved changes?" (`ReloadDialog`, which the stale toast's Reload button opens too through the UI store; `reloadSchema` and `requestReload` are in `chrome/reload.ts`). Auto-arrange (`canvas/arrange.ts`) lays every table out again, those that had a place included, and asks the canvas to fit them in the view; the layout otherwise only places tables that have no place.
+
+**Rationale:** the plan's top bar and its O1 test, Generate SQL off with no changes or errors.
+
+## The SQL panel (O2)
+
+**Date & time:** 2026-11-01 11:30
+
+Generate SQL opens a drawer under the canvas (`sql/SqlPanel.tsx`) with a read-only CodeMirror 6 view (`sql/SqlView.tsx`, `@codemirror/lang-sql` with the PostgreSQL dialect, line numbers, themed with the app's colour variables; it can be selected and copied but not changed). The SQL is made by `useMigration` (`sql/use-migration.ts`) with core's `renderMigration`, again whenever the edits, the loaded schema, the stale flag or the connection change. Before each time, `schema.fingerprint` is asked, and it must be the fingerprint the schema was loaded with, not what the poller last saw. If it isn't, `onSchemaChanged` looks first: if the edits were applied they are taken and there is nothing left to generate; if not, the schema goes stale and generation is blocked; if the handler leaves everything as it was and the database still differs, it is blocked too ("the change is not taken yet"), so SQL is never made for a database that changed under the edits. Fresh cast data is read for every generation through `schema.casts` (a handler added now, with core's `introspectCasts` exported). A failure of any step shows "Couldn't generate the SQL: …" and no SQL.
+
+Not in the panel yet: Copy, Save and Validate (O4–O7).
+
+**Rationale:** the plan's SQL panel and its pre-check. The e2e tests ask for the SQL at once after an external change, before the poller can have said anything, which is the pre-check's own path.
+
+## The risk summary (O3)
+
+**Date & time:** 2026-11-01 11:30
+
+`sql/RiskSummary.tsx` shows the risks of the migration counted by kind in the fixed order destructive, may fail, breaks app code, locks or slow, each count a button that opens into the list of what it is about (each by itself); the destructive count is red. With none it says "No risks found." It is in the panel's header while the SQL is ready.
+
+**Rationale:** the plan's O3; the component test has the counts, the order, opening and closing each list on its own.

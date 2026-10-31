@@ -842,9 +842,9 @@ J7 changes four files, and deletes the old `connect-form.ts` and `TextField.tsx`
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| O1 | Top bar: database, schema filter slot, change and risk counts, buttons with disabled states | `chrome/TopBar.tsx`, `screens/Editor.tsx` | Generate SQL disabled with no changes or validation errors | todo |
-| O2 | SQL panel: pre-check against `loadedFingerprint` (handler on mismatch, generation stops), fresh cast data via `schema.casts`, CodeMirror view | `sql/SqlPanel.tsx`, `sql/SqlView.tsx`, `main/ipc/schema.ts` | E2E: SQL appears; an unrelated external change blocks it; an applied migration is adopted instead; a failing handler leaves generation blocked | todo |
-| O3 | Risk summary | `sql/RiskSummary.tsx` | Component test: counts and expandable lists | todo |
+| O1 | Top bar: database, schema filter slot, change and risk counts, buttons with disabled states | `chrome/TopBar.tsx`, `screens/Editor.tsx` | Generate SQL disabled with no changes or validation errors | done |
+| O2 | SQL panel: pre-check against `loadedFingerprint` (handler on mismatch, generation stops), fresh cast data via `schema.casts`, CodeMirror view | `sql/SqlPanel.tsx`, `sql/SqlView.tsx`, `main/ipc/schema.ts` | E2E: SQL appears; an unrelated external change blocks it; an applied migration is adopted instead; a failing handler leaves generation blocked | done |
+| O3 | Risk summary | `sql/RiskSummary.tsx` | Component test: counts and expandable lists | done |
 | O4 | Copy button | `sql/SqlPanel.tsx` | E2E: clipboard holds the SQL | todo |
 | O5 | Save via native dialog, filename pattern, last folder | `services/files.ts`, `store/settings.ts`, `main/ipc/files.ts` | Unit: filename format; the second save opens in the first save's folder | todo |
 | O6 | Validator on a task connection through `runSingle`; `sql.validate` channel | `services/validator.ts`, `main/ipc/sql.ts` | *DB*: `SET NOT NULL` on a column with nulls fails at the right statement; fingerprint unchanged after; the poller never reports a change during a run; an expression containing `; COMMIT;` can't end the transaction; a fingerprint change aborts the run; the dry run uses the original `search_path` | todo |
