@@ -1166,3 +1166,13 @@ The results (`sql/ValidateResults.tsx`) are a list beside the SQL, one row for e
 `e2e/packaged.spec.ts` launches a packaged build (Playwright's Electron launcher, with `executablePath` now an argument of `launchApp`) from `PGSKETCH_EXECUTABLE`, checks that `app.isPackaged` is true and the Connect screen is shown, then closes it and expects exit code 0. Without the variable the test skips, so the ordinary e2e run is not affected. The `package` job in `.github/workflows/ci.yml` builds the `.deb`, **installs it with apt** and runs the test against `/opt/pgsketch/pgsketch`, so the package itself, and not just the unpacked folder, is what is checked; it then uploads the `.deb` as an artifact. Locally: `PGSKETCH_EXECUTABLE=$PWD/dist/linux-unpacked/pgsketch pnpm exec playwright test e2e/packaged.spec.ts` after packaging.
 
 **Rationale:** the plan's P2. The job has not been run on GitHub from here; the same steps were run locally against the unpacked build, and the install against clean images by P1's script.
+
+## The README and its screenshots (P3)
+
+**Date & time:** 2026-11-01 05:40
+
+`README.md` has the install steps, a tour of the connect, edit and generate loop, what 0.1.0 leaves out, where the files are, the architecture in a few lines (with links to the build plan and this file for the detail) and the commands to develop. Every statement about the app was checked against the code or the UI; the install steps are the ones that were run on a real desktop and in the Docker check. The package is said to be tested on Ubuntu 24.04 and Debian 12, the two it was installed on, and not on other releases. It says nothing about a licence, as there is none yet.
+
+**The screenshots are taken by a test, not by hand.** `apps/desktop/e2e/screenshots.spec.ts` starts the app on the fixture every core test uses (three tables over two schemas), makes two edits and validates them, and writes `connect.png`, `canvas.png` and `sql.png` into `docs/screenshots/` at 1280 × 800. It skips unless `PGSKETCH_SCREENSHOTS` is set, so the normal e2e run does not touch the pictures, and they can be made again when the screens change.
+
+**Rationale:** the plan's P3. A picture taken by hand goes out of date with the first change to a screen and nobody remembers how it was made; a test that makes them also fails when the flow it shows stops working.
