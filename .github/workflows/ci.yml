@@ -53,3 +53,24 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: xvfb-run --auto-servernum pnpm --filter @pgsketch/desktop test:e2e
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pgsketch/desktop package
+      # the installed program, not the unpacked folder: the package itself is what is tested
+      - run: sudo apt-get install -y ./apps/desktop/dist/pgsketch_*_amd64.deb
+      - run: xvfb-run --auto-servernum pnpm --filter @pgsketch/desktop exec playwright test e2e/packaged.spec.ts
+        env:
+          PGSKETCH_EXECUTABLE: /opt/pgsketch/pgsketch
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pgsketch-deb
+          path: apps/desktop/dist/pgsketch_*_amd64.deb
