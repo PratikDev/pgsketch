@@ -33,6 +33,7 @@ export const api = {
   schema: {
     load: () => call('schema.load'),
     fingerprint: () => call('schema.fingerprint'),
+    casts: () => call('schema.casts'),
   },
   expr: {
     normalize: (request: IpcInputs['expr.normalize']) =>

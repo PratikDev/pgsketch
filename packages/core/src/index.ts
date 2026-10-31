@@ -3,6 +3,7 @@ export type { ValidationCode, ValidationError } from './model/errors';
 export { validateModel } from './model/validate';
 export { assignNames } from './model/naming';
 export { fingerprint } from './fingerprint/fingerprint';
+export { introspectCasts } from './introspect/casts';
 export { introspect } from './introspect';
 export type { Introspection } from './introspect';
 export type { Query, QueryParam } from './introspect/query';

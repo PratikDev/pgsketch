@@ -91,4 +91,26 @@ describe('loadSchema', () => {
     expect(structuredClone(loaded)).toEqual(loaded);
     expect(Object.keys(loaded.model.tables).length).toBe(3);
   });
+
+  test('the schema.casts channel gives the cast data of the open database, the same as a load does', async () => {
+    const { deps } = testDeps();
+    await deps.session.replace({
+      connection,
+      normalizer: createNormalizer(() => Promise.reject(new Error('unused'))),
+      poller: fakePoller(),
+      info: {
+        serverVersion: '16',
+        database: 'x',
+        host: 'h',
+        hostKind: 'local',
+        dbKey: 'k',
+        saved: null,
+      },
+    });
+    const ipc = fakeIpc();
+    registerSchema(ipc, deps);
+    const casts = await ipc.invoke('schema.casts');
+    expect(Object.keys(casts.casts).length).toBeGreaterThan(100);
+    expect(casts).toEqual((await loadSchema(connection)).casts);
+  });
 });
