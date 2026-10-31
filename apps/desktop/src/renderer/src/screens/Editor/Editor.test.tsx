@@ -100,7 +100,7 @@ describe('Editor', () => {
     expect(screen.getByRole('heading', { name: 'Editor' })).toBeInTheDocument();
     expect(screen.getByText('app')).toBeInTheDocument();
     expect(screen.getByText(/no keyring/)).toBeInTheDocument();
-    await screen.findByText(/Connected to/);
+    await screen.findByText(/on localhost · Postgres 16\.4/);
   });
 
   describe('the edits of the last time', () => {

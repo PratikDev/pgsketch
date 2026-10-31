@@ -7,7 +7,7 @@ import type { TableView } from './model-view';
 export type LayoutStatus = 'pending' | 'ready' | 'failed';
 
 /** The foreign keys as links between rows, for the layout. */
-function linksOf(model: SchemaModel): LayoutLink[] {
+export function linksOf(model: SchemaModel): LayoutLink[] {
   return Object.values(model.constraints).flatMap((key): LayoutLink[] => {
     const from = key.kind === 'fk' ? key.columnIds[0] : undefined;
     const to = key.kind === 'fk' ? key.refColumnIds[0] : undefined;

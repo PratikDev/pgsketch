@@ -1,5 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { act, render, waitFor } from '@testing-library/react';
 import type { MouseEvent } from 'react';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -34,7 +33,12 @@ beforeEach(() => {
       .load({ model: fixtureModel, casts, fingerprint: 'f0' }),
   );
 });
-afterEach(() => act(() => uiStore.getState().setConnectionLost(null)));
+afterEach(() =>
+  act(() => {
+    uiStore.getState().setConnectionLost(null);
+    uiStore.getState().setReloadAsked(false);
+  }),
+);
 
 /** What the notice for this id was shown with, and a way to press its button. */
 const notice = (kind: 'warning' | 'error', id: string) => {
@@ -81,74 +85,18 @@ describe('StaleBanner: the schema is stale', () => {
     });
   });
 
-  test('Reload asks first, naming how many edits go, and keeps the toast while it does', async () => {
-    const calls = installFakeApi({
-      'schema.load': () => ({ model: fixtureModel, casts, fingerprint: 'f1' }),
-    });
+  test('Reload asks the question, and does not close the toast', () => {
     act(() => {
       schemaStore.getState().renameTable('t:10', 'people');
-      schemaStore.getState().renameColumn('c:10:2', 'state');
       schemaStore.getState().markStale();
     });
     render(<StaleBanner onReconnected={vi.fn()} />);
+    expect(uiStore.getState().reloadAsked).toBe(false);
     const press = notice('warning', 'schema-stale').press();
-    // the button must not close the toast: Cancel leaves things as they were
+    // the toast stays: Cancel in the dialog leaves it as it was
     expect(press.preventDefault).toHaveBeenCalled();
-    expect(
-      await screen.findByRole('heading', {
-        name: 'Reload and discard 2 unsaved changes?',
-      }),
-    ).toBeInTheDocument();
-    // nothing is read, and nothing is lost, until it is confirmed
-    expect(calls).toEqual([]);
-    expect(schemaStore.getState().desired.tables['t:10']!.name).toBe('people');
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Reload and discard' }),
-    );
-    await waitFor(() => expect(schemaStore.getState().stale).toBe(false));
-    expect(schemaStore.getState().desired.tables['t:10']!.name).toBe('users');
-    expect(schemaStore.getState().loadedFingerprint).toBe('f1');
-    // no longer stale: the toast goes
-    expect(toast.dismiss).toHaveBeenCalledWith('schema-stale');
-  });
-
-  test('Cancel keeps everything as it was, and the toast', async () => {
-    act(() => {
-      schemaStore.getState().renameTable('t:10', 'people');
-      schemaStore.getState().markStale();
-    });
-    render(<StaleBanner onReconnected={vi.fn()} />);
-    act(() => void notice('warning', 'schema-stale').press());
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Cancel' }),
-    );
-    expect(schemaStore.getState().stale).toBe(true);
-    expect(schemaStore.getState().desired.tables['t:10']!.name).toBe('people');
+    expect(uiStore.getState().reloadAsked).toBe(true);
     expect(toast.dismiss).not.toHaveBeenCalledWith('schema-stale');
-  });
-
-  test('a reload that cannot read the database says so, and keeps the edits and the toast', async () => {
-    installFakeApi({
-      'schema.load': () => {
-        throw new Error('connection lost');
-      },
-    });
-    act(() => {
-      schemaStore.getState().renameTable('t:10', 'people');
-      schemaStore.getState().markStale();
-    });
-    render(<StaleBanner onReconnected={vi.fn()} />);
-    act(() => void notice('warning', 'schema-stale').press());
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Reload and discard' }),
-    );
-    await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith(
-        expect.stringContaining('connection lost'),
-      ),
-    );
-    expect(schemaStore.getState().desired.tables['t:10']!.name).toBe('people');
-    expect(schemaStore.getState().stale).toBe(true);
   });
 
   test('goes by itself when the schema is no longer stale, and with the Editor', () => {

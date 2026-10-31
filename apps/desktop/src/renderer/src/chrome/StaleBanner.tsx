@@ -1,29 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/api';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { useDerived } from '@/stores/derived';
-import { schemaStore, useSchemaStore } from '@/stores/schema';
+import { useSchemaStore } from '@/stores/schema';
 import { uiStore, useUiStore } from '@/stores/ui';
-
-/** Reads the schema again and drops the edits: what the database has is what there is. */
-async function reload(): Promise<void> {
-  try {
-    schemaStore.getState().load(await api.schema.load());
-  } catch (error) {
-    toast.error(
-      `Couldn't reload the schema: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-}
 
 const STALE = 'schema-stale';
 const LOST = 'connection-lost';
@@ -43,8 +22,6 @@ export function StaleBanner({
 }) {
   const stale = useSchemaStore((s) => s.stale);
   const lost = useUiStore((s) => s.connectionLost);
-  const { ops } = useDerived();
-  const [asking, setAsking] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const reconnectedRef = useRef(onReconnected);
   reconnectedRef.current = onReconnected;
@@ -61,7 +38,7 @@ export function StaleBanner({
         onClick: (event) => {
           // the toast stays: the answer to the question decides
           event.preventDefault();
-          setAsking(true);
+          uiStore.getState().setReloadAsked(true);
         },
       },
     });
@@ -112,34 +89,6 @@ export function StaleBanner({
     setReconnecting(false);
   }
 
-  return (
-    <Dialog open={asking} onOpenChange={setAsking}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            Reload and discard {ops.length}{' '}
-            {ops.length === 1 ? 'unsaved change' : 'unsaved changes'}?
-          </DialogTitle>
-          <DialogDescription>
-            The schema is read again from the database, and the edits you made
-            are thrown away.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setAsking(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => {
-              setAsking(false);
-              void reload();
-            }}
-          >
-            Reload and discard
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+  // all it does is show toasts
+  return null;
 }

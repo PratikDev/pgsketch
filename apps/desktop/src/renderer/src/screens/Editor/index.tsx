@@ -1,18 +1,18 @@
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
 import { Canvas } from '@/canvas/Canvas';
-import { ChangeCount } from '@/chrome/ChangeCount';
 import { StaleBanner } from '@/chrome/StaleBanner';
-import { SchemaFilter } from '@/chrome/SchemaFilter';
+import { ReloadDialog } from '@/chrome/ReloadDialog';
+import { TopBar } from '@/chrome/TopBar';
 import { layoutStore } from '@/stores/layout';
 import { persistence } from '@/stores/persistence';
+import { SqlPanel } from '@/sql/SqlPanel';
+import { uiStore, useUiStore } from '@/stores/ui';
 import type { SessionInfo } from '../../../../shared/ipc-contract';
 import { useLoadSchema } from './use-load-schema';
 import { useSchemaChanges } from './use-schema-changes';
 
-/** The open database: its tables on the canvas, under a slim bar until the real top bar is built. */
+/** The open database: its tables on the canvas, under the top bar. */
 export function Editor({
   session,
   onDisconnect,
@@ -22,6 +22,7 @@ export function Editor({
 }) {
   const load = useLoadSchema(session.dbKey);
   const onSchemaChanged = useSchemaChanges(load.status === 'ready');
+  const sqlOpen = useUiStore((s) => s.sqlPanelOpen);
   // a schema that could not be read is said once, and stays until the Editor goes
   useEffect(() => {
     if (load.status !== 'failed') return;
@@ -40,32 +41,17 @@ export function Editor({
       window.removeEventListener('beforeunload', flush);
       void layoutStore.getState().flush();
       void persistence.stop();
+      uiStore.getState().setSqlPanelOpen(false);
     };
   }, []);
   return (
     <main className="flex h-screen flex-col">
-      <header className="flex items-center gap-4 border-b border-border px-4 py-2">
-        <h1 className="font-semibold">Editor</h1>
-        <p className="text-sm text-muted-foreground">
-          Connected to <strong>{session.database}</strong> on {session.host}{' '}
-          (Postgres {session.serverVersion}).
-        </p>
-        {session.saved?.passwordNotSaved && (
-          <Alert className="w-auto py-1">
-            <AlertDescription>
-              The password was not saved: this system has no keyring to keep it
-              in.
-            </AlertDescription>
-          </Alert>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          {load.status === 'ready' && <ChangeCount />}
-          {load.status === 'ready' && <SchemaFilter />}
-          <Button variant="outline" onClick={onDisconnect}>
-            Disconnect
-          </Button>
-        </div>
-      </header>
+      <TopBar
+        session={session}
+        ready={load.status === 'ready'}
+        onDisconnect={onDisconnect}
+      />
+      <ReloadDialog />
       <StaleBanner onReconnected={() => void onSchemaChanged()} />
       <div className="min-h-0 flex-1">
         {load.status === 'loading' && (
@@ -73,6 +59,9 @@ export function Editor({
         )}
         {load.status === 'ready' && <Canvas />}
       </div>
+      {sqlOpen && load.status === 'ready' && (
+        <SqlPanel dbName={session.database} onSchemaChanged={onSchemaChanged} />
+      )}
     </main>
   );
 }

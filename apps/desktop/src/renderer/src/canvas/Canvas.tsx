@@ -50,12 +50,19 @@ const gridPosition = (index: number) => ({
   y: Math.floor(index / 3) * 340,
 });
 
-/** Fits the view to the tables once, when the layout first places them. */
+/** Fits the view to the tables when the layout first places them, and when asked to. */
 function FitWhenLaidOut({ laidOut }: { laidOut: boolean }) {
   const { fitView } = useReactFlow();
+  const requests = useUiStore((s) => s.fitRequests);
   useEffect(() => {
     if (laidOut) void fitView();
   }, [laidOut, fitView]);
+  // after the tables were arranged anew; a moment later, for React Flow to have the new places
+  useEffect(() => {
+    if (requests === 0) return;
+    const timer = setTimeout(() => void fitView({ duration: 300 }), 50);
+    return () => clearTimeout(timer);
+  }, [requests, fitView]);
   return null;
 }
 
