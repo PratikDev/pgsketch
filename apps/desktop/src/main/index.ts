@@ -10,7 +10,7 @@ import {
   shell,
 } from 'electron';
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
-import icon from '../../resources/icon.png?asset';
+import icon from '../../build/icon.png?asset';
 import type { EmitEvent } from './ipc/deps';
 import { registerAllIpc } from './ipc';
 import { createLogger, fileSink } from './log';
