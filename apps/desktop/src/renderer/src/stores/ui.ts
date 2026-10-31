@@ -20,6 +20,15 @@ export interface UiState {
   /** Why the connection to the database was lost, while it is. */
   connectionLost: string | null;
   setConnectionLost: (reason: string | null) => void;
+  /** Whether the question "Reload and discard N unsaved changes?" is being asked. */
+  reloadAsked: boolean;
+  setReloadAsked: (asked: boolean) => void;
+  /** Whether the SQL panel at the foot of the Editor is open. */
+  sqlPanelOpen: boolean;
+  setSqlPanelOpen: (open: boolean) => void;
+  /** Counts the times the canvas was asked to fit the tables in the view again. */
+  fitRequests: number;
+  requestFit: () => void;
   toggleSchema: (schemaId: Id) => void;
   showAllSchemas: () => void;
 }
@@ -40,6 +49,12 @@ export const createUiStore = () =>
     setNormalizationFallback: () => set({ normalizationFallback: true }),
     connectionLost: null,
     setConnectionLost: (reason) => set({ connectionLost: reason }),
+    reloadAsked: false,
+    setReloadAsked: (reloadAsked) => set({ reloadAsked }),
+    sqlPanelOpen: false,
+    setSqlPanelOpen: (sqlPanelOpen) => set({ sqlPanelOpen }),
+    fitRequests: 0,
+    requestFit: () => set((s) => ({ fitRequests: s.fitRequests + 1 })),
     cancelEditing: () => set({ editing: null, addedColumn: null }),
     toggleSchema: (schemaId) =>
       set(({ hiddenSchemas }) => ({
