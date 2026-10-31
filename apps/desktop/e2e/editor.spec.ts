@@ -1391,7 +1391,9 @@ test('an unrelated change from outside shows the banner, and Reload throws the e
     ).toBeVisible({ timeout: 10_000 });
 
     // asked first, and Cancel changes nothing
-    await window.getByRole('button', { name: 'Reload', exact: true }).click();
+    await toastWith(window, 'changed outside pgsketch')
+      .getByRole('button', { name: 'Reload' })
+      .click();
     await expect(
       window.getByRole('heading', {
         name: 'Reload and discard 1 unsaved change?',
@@ -1405,7 +1407,9 @@ test('an unrelated change from outside shows the banner, and Reload throws the e
       window.getByText('The database schema changed outside pgsketch.'),
     ).toBeVisible();
 
-    await window.getByRole('button', { name: 'Reload', exact: true }).click();
+    await toastWith(window, 'changed outside pgsketch')
+      .getByRole('button', { name: 'Reload' })
+      .click();
     await window.getByRole('button', { name: 'Reload and discard' }).click();
     await expect(
       window.getByText('The database schema changed outside pgsketch.'),
@@ -1488,6 +1492,12 @@ test('when the connection is lost the banner says so, keeps the edits, and recon
     await expect(notice).toBeVisible();
     await expect(window.getByText(/Your edits are kept/)).toBeVisible();
     await expect(changes(window, 1)).toBeVisible();
+    // no SQL while the connection is down
+    const generate = window.getByRole('button', { name: 'Generate SQL' });
+    await expect(generate).toBeDisabled();
+    expect(await generate.locator('..').getAttribute('title')).toMatch(
+      /connection .* lost/,
+    );
 
     await window.getByRole('button', { name: 'Reconnect' }).click();
     await expect(lost).toHaveCount(0);
@@ -1524,6 +1534,180 @@ test('when the server stops the banner says so, and Reconnect says it cannot whi
   } finally {
     await app.close();
     await extra.stop().catch(() => undefined);
+  }
+});
+
+test('the top bar counts the changes and the risky ones, switches Generate SQL on and off with a reason, reloads and arranges', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  const table = 'billing.line_items';
+  const generate = window.getByRole('button', { name: 'Generate SQL' });
+  // a disabled button has no tooltip of its own, so the reason is on what it sits in
+  const reason = () => generate.locator('..').getAttribute('title');
+  await expect(window.getByText(/on .* · Postgres \d+/)).toBeVisible();
+  await expect(generate).toBeDisabled();
+  expect(await reason()).toMatch(/no changes/);
+  await expect(window.getByText('0 changes', { exact: true })).toBeVisible();
+
+  // a name a column of the table has already is an error
+  const label = rowOf(window, table, 'label');
+  await label.getByRole('button', { name: 'label', exact: true }).click();
+  await window.keyboard.type('issued');
+  await window.keyboard.press('Tab');
+  await expect(generate).toBeDisabled();
+  expect(await reason()).toMatch(/Fix this first/);
+
+  // another name, and it is a change, a risky one: code that uses the old name breaks
+  await window
+    .getByRole('region', { name: table })
+    .getByRole('listitem')
+    .last()
+    .getByRole('button', { name: 'issued', exact: true })
+    .click();
+  await window.keyboard.type('tag');
+  await window.keyboard.press('Tab');
+  await expect(generate).toBeEnabled();
+  expect(await reason()).toBeNull();
+  await expect(window.getByText('1 change', { exact: true })).toBeVisible();
+  await expect(window.getByText(/· 1 breaks app code/)).toBeVisible();
+
+  // Reload asks first when there are edits to lose
+  await window.getByRole('button', { name: 'Reload', exact: true }).click();
+  await expect(
+    window.getByRole('heading', {
+      name: 'Reload and discard 1 unsaved change?',
+    }),
+  ).toBeVisible();
+  await window.getByRole('button', { name: 'Cancel' }).click();
+  await expect(window.getByRole('dialog')).toHaveCount(0);
+  await expect(window.getByText('1 change', { exact: true })).toBeVisible();
+
+  // Auto-arrange puts the tables where the layout wants them, and moved ones too
+  const arranged = await spot(window, table);
+  const header = window.getByRole('region', { name: table }).locator('header');
+  const grab = (await header.boundingBox())!;
+  // by the empty end of the header: its start is the schema, which is a button
+  const [x, y] = [grab.x + grab.width - 40, grab.y + grab.height / 2];
+  await window.mouse.move(x, y);
+  await window.mouse.down();
+  await window.mouse.move(x - 40, y + 60, { steps: 8 });
+  await window.mouse.up();
+  const moved = await spot(window, table);
+  expect(moved).not.toBe(arranged);
+  await window.getByRole('button', { name: 'Auto-arrange' }).click();
+  await expect.poll(() => spot(window, table)).toBe(arranged);
+  await app.close();
+});
+
+test('Generate SQL shows the SQL and its risks, and makes it again as the edits change', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  const table = 'billing.line_items';
+  await rowOf(window, table, 'label')
+    .getByRole('button', { name: 'label', exact: true })
+    .click();
+  await window.keyboard.type('title');
+  await window.keyboard.press('Tab');
+
+  await window.getByRole('button', { name: 'Generate SQL' }).click();
+  const panel = window.getByRole('region', { name: 'SQL' });
+  const text = panel.locator('.cm-content');
+  await expect(text).toContainText('BEGIN;');
+  await expect(text).toContainText('RENAME COLUMN "label" TO "title"');
+  await expect(text).toContainText('COMMIT;');
+  await expect(text).toContainText('-- Database:');
+
+  // the risks, counted, and opening into what they are about
+  const risk = panel.getByRole('button', { name: '1 breaks app code' });
+  await expect(risk).toBeVisible();
+  await expect(
+    panel.getByRole('list', { name: 'Risks: breaks app code' }),
+  ).toHaveCount(0);
+  await risk.click();
+  await expect(
+    panel.getByRole('list', { name: 'Risks: breaks app code' }),
+  ).toBeVisible();
+  await expect(text).toContainText('-- WARNING (breaks app code)');
+
+  // another edit while it is open: the SQL follows
+  await rowOf(window, table, 'issued')
+    .getByRole('button', { name: 'issued', exact: true })
+    .click();
+  await window.keyboard.type('day');
+  await window.keyboard.press('Tab');
+  await expect(text).toContainText('RENAME COLUMN "issued" TO "day"');
+  await expect(text).toContainText('RENAME COLUMN "label" TO "title"');
+
+  // dropping a column is destructive, and said so
+  const row = rowOf(window, table, 'title');
+  await row.hover();
+  await row.getByRole('button', { name: 'Column actions' }).click();
+  await window.getByRole('menuitem', { name: 'Delete column' }).click();
+  await expect(
+    panel.getByRole('button', { name: /destructive/ }),
+  ).toBeVisible();
+  await expect(text).toContainText('DROP COLUMN');
+
+  await panel.getByRole('button', { name: 'Close the SQL panel' }).click();
+  await expect(panel).toHaveCount(0);
+  await app.close();
+});
+
+test('SQL is not made from a schema that changed under the edits: an unrelated change blocks it', async () => {
+  test.setTimeout(120_000);
+  const extra = await startScratchServer();
+  try {
+    const { app, window } = await launchApp();
+    await connectThroughForm(window, extra, E2E_PASSWORD);
+    await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await showTable(window, 'public.scratch');
+    await rowOf(window, 'public.scratch', 'a')
+      .getByRole('button', { name: 'a', exact: true })
+      .click();
+    await window.keyboard.type('aa');
+    await window.keyboard.press('Tab');
+    await expect(changes(window, 1)).toBeVisible();
+
+    // something else changed, which the edits know nothing about; asked for at once, before the poller
+    await extra.admin.query('ALTER TABLE public.scratch ADD COLUMN c integer');
+    await window.getByRole('button', { name: 'Generate SQL' }).click();
+    const panel = window.getByRole('region', { name: 'SQL' });
+    await expect(panel).toContainText(/changed outside pgsketch/, {
+      timeout: 10_000,
+    });
+    await expect(panel.locator('.cm-editor')).toHaveCount(0);
+    await expect(
+      window.getByRole('button', { name: 'Generate SQL' }),
+    ).toBeDisabled();
+
+    await app.close();
+  } finally {
+    await extra.stop();
+  }
+});
+
+test('an applied migration asked for at once is adopted, and there is nothing left to generate', async () => {
+  test.setTimeout(120_000);
+  const extra = await startScratchServer();
+  try {
+    const { app, window } = await launchApp();
+    await connectThroughForm(window, extra, E2E_PASSWORD);
+    await expect(window.locator('[data-layout="ready"]')).toHaveCount(1);
+    await showTable(window, 'public.scratch');
+    await rowOf(window, 'public.scratch', 'a')
+      .getByRole('button', { name: 'a', exact: true })
+      .click();
+    await window.keyboard.type('aa');
+    await window.keyboard.press('Tab');
+    await extra.admin.query('ALTER TABLE public.scratch RENAME COLUMN a TO aa');
+    await window.getByRole('button', { name: 'Generate SQL' }).click();
+    const panel = window.getByRole('region', { name: 'SQL' });
+    await expect(toastWith(window, 'Changes applied')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(panel).toContainText(/no changes to generate/);
+    await expect(panel.locator('.cm-editor')).toHaveCount(0);
+    await app.close();
+  } finally {
+    await extra.stop();
   }
 });
 
