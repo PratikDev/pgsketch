@@ -1105,3 +1105,40 @@ Not in the panel yet: Copy, Save and Validate (O4–O7).
 `sql/RiskSummary.tsx` shows the risks of the migration counted by kind in the fixed order destructive, may fail, breaks app code, locks or slow, each count a button that opens into the list of what it is about (each by itself); the destructive count is red. With none it says "No risks found." It is in the panel's header while the SQL is ready.
 
 **Rationale:** the plan's O3; the component test has the counts, the order, opening and closing each list on its own.
+
+## Copy and Save (O4, O5)
+
+**Date & time:** 2026-11-01 00:10
+
+**Copy** writes the text of the migration (the whole file, as shown) to the clipboard with `navigator.clipboard.writeText`, and the button says "Copied" for 1.5 s; a clipboard that refuses is an error toast. **Save** sends the text and a suggested name to `sql.save`. The name, `YYYYMMDD_HHmmss_pgsketch.sql` in the time of whoever saves, is made by `migrationFileName` in `shared/file-name.ts` and not in `services/files.ts` as the plan lists it, because the channel takes the name from the renderer and the renderer can't import from the main process. In the main process `services/files.ts` opens the native dialog (`electron`'s `dialog`, attached to the focused window, with a `.sql` filter) at the folder of the last save, or the Documents folder when there was none, writes the file, and remembers the folder of the chosen path. Only the last part of the suggested name is used, so the renderer can't pick a folder with it, and the folder is remembered only after the file was written. The folder is kept in the `settings` table (`store/settings.ts`, a repo with `get(key, schema)` and `set(key, value)`: values are JSON, and one that is not what the schema accepts counts as none). A cancelled dialog is not an error and says nothing; a saved file shows "Saved <path>"; a write that fails is an error toast.
+
+**Rationale:** the plan's O4 and O5. The native dialog can't be driven by Playwright, so the e2e test replaces `dialog.showSaveDialog` in the main process; the second save opening in the first one's folder is a unit test of `services/files.ts`.
+
+## The validator (O6)
+
+**Date & time:** 2026-11-01 00:10
+
+`services/validator.ts` makes a dry run: a task connection opened for the run and closed after it (in a `finally`, whatever happened), `rolledBack` (`BEGIN` … `ROLLBACK`), then the statements one by one through the connection's `query`, which is `runSingle`, so a statement that carries a `; COMMIT;` is refused by the server (the e2e and DB tests check that the fingerprint is unchanged after it). The run stops at the first failure; the statements after it are `not-run`. Postgres's message (with passwords removed, as for connection errors) and SQLSTATE are kept with the failed statement. The session has a `validator` next to its `normalizer`, built from the same connection parameters, so `sql.validate` needs nothing but the open session.
+
+Two differences from the plan's wording. The lock and statement timeouts (`3s`, `30s`) and the original `search_path` are set with `set_config(name, $1, true)` and a bound value, not `SET LOCAL … = <text>`: it does the same for the transaction, and the `search_path` text (which is a list of names, as Postgres wrote it) never goes into SQL text; `expr.normalize` does the same. And the check that the database is still what the statements were made for (`sql.validate` takes the fingerprint they were made on) is made on the task connection, inside the transaction, before the first statement and before the `search_path` is set (the fingerprint is defined with it empty): if it differs the answer is `stale` and nothing was run, so the window between check and run is as short as it can be. The renderer checks the fingerprint first too (the plan's step 1), for the handler to run before anything is asked of the server.
+
+**Rationale:** the plan's O6 and its Validate flow. The DB test has the six cases the plan asks for: `SET NOT NULL` over nulls fails at its own statement with `23502` and the ones after it are not run; the fingerprint is the same after; the poller reports nothing during a run (a statement sleeps while it polls every 50 ms); a statement with `; COMMIT;` can't end the transaction; a changed fingerprint runs nothing; a name without a schema works because of the original `search_path`.
+
+## Validate results and the question for remote servers (O7)
+
+**Date & time:** 2026-11-01 00:10
+
+`useValidate` (`sql/use-validate.ts`) does the renderer's part in the plan's order: ask `schema.fingerprint` and compare it with `loadedFingerprint` (a difference runs `onSchemaChanged` and stops: the SQL is made again from what that leaves), then, if the server is `remote`, ask first (`ConfirmValidateDialog`: "Validate on <host>?", saying that it takes locks), then `sql.validate`. A `stale` answer is handled like the first check. Only `remote` asks: a socket and the loopback addresses are this machine (`hostKind`, from `isLocalHost`). It asks every run, not once per session, since the locks are the same every time. A run that throws is an error toast and Validate works again.
+
+The results (`sql/ValidateResults.tsx`) are a list beside the SQL, one row for each statement in the order they ran: passed, failed with Postgres's message and code, or not run, with a line over the list saying "All N statements passed" or "Statement K of N failed", and in both cases "Nothing was kept." They are tied to the exact text of the SQL they were run for: when the SQL changes they go, so a result is never shown against SQL it wasn't run on. The plan says "next to each statement"; a list beside the view was chosen over marks inside the CodeMirror view because the statement array and the text are two renderings of the same ops with no line mapping between them, and a mapping would be a second thing to keep in step with core.
+
+**Rationale:** the plan's O7. The e2e tests use `127.0.0.2` as a host the app doesn't know as local, which on Linux is still this machine, so the question can be asked and answered against the test container.
+
+## Small things made while building O4–O7
+
+**Date & time:** 2026-11-01 00:10
+
+- `lib/errors.ts` has `messageOf(error)`, which ten places had written out; the files of O1–O7 use it, the older ones are not changed.
+- The helpers that the e2e specs share (`zoomOf`, `zoomUntil`, `spot`, `rowOf`, `showTable`, `startScratchServer`, `changes`, `toastWith`) moved from `e2e/editor.spec.ts` to `e2e/canvas.ts` so that `e2e/sql.spec.ts` can use them; they are the same code.
+- `testSession()` in the renderer's `test-utils.ts` makes the open-database object for component tests.
+- A scratch table made by the test's admin user must be given to the app's user (`ALTER TABLE … OWNER TO`) before Validate on it can pass: the dry run really runs the `ALTER`, and Postgres refuses it to anyone but the owner, which is the right answer.
