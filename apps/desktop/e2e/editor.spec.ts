@@ -4,6 +4,16 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { Client } from 'pg';
 import type { TestServer } from '../test/postgres';
 import { launchApp } from './app';
+import {
+  changes,
+  rowOf,
+  showTable,
+  spot,
+  startScratchServer,
+  toastWith,
+  zoomOf,
+  zoomUntil,
+} from './canvas';
 import { connectThroughForm } from './form';
 import { E2E_PASSWORD, startE2eServer } from './server';
 
@@ -111,57 +121,6 @@ test("foreign keys are lines with crow's feet, a self-reference is a loop, and t
   expect(boxes['billing.invoices']!.x).toBeLessThan(boxes['public.users']!.x);
   await app.close();
 });
-
-/** The scale React Flow draws the canvas at, from the transform on its viewport. */
-const zoomOf = async (window: Page) =>
-  Number(
-    /scale\(([\d.]+)\)/.exec(
-      (await window.locator('.react-flow__viewport').getAttribute('style')) ??
-        '',
-    )?.[1],
-  );
-
-/** Zooms with the canvas controls until the tables are (or are not) compact; the fit on load can land either side of 70%. */
-async function zoomUntil(window: Page, compact: boolean) {
-  const button = window.getByRole('button', {
-    name: compact ? 'zoom out' : 'zoom in',
-  });
-  while ((await zoomOf(window)) < 0.7 !== compact) {
-    await button.click();
-    await window.waitForTimeout(350);
-  }
-}
-
-/** Where the canvas has a table, which unlike its place on screen does not depend on the zoom. */
-const spot = (window: Page, table: string) =>
-  window
-    .locator('.react-flow__node', {
-      has: window.getByRole('region', { name: table }),
-    })
-    .evaluate((node) => node.style.transform);
-
-/** The row of a column in a table, at a zoom where tables are not compact. */
-const rowOf = (window: Page, table: string, column: string) =>
-  window
-    .getByRole('region', { name: table })
-    .getByRole('listitem')
-    .filter({ has: window.getByRole('button', { name: column, exact: true }) });
-
-/**
- * Brings a table into view at a readable zoom. Zooming in with the controls goes towards the
- * middle and can push a table off screen, so this fits all the tables in the view first and then
- * clicks the table's compact node, which zooms to exactly that table.
- */
-async function showTable(window: Page, table: string) {
-  await window.getByRole('button', { name: 'fit view' }).click();
-  await window.waitForTimeout(400);
-  if ((await zoomOf(window)) < 0.7)
-    await window.getByRole('region', { name: table }).click();
-  await expect.poll(() => zoomOf(window)).toBeGreaterThanOrEqual(0.7);
-  await expect(
-    window.getByRole('region', { name: table }).getByRole('listitem').first(),
-  ).toBeVisible();
-}
 
 async function openEditor(table?: string) {
   const { app, window } = await launchApp();
@@ -1256,17 +1215,6 @@ test('edits made on a database that was dropped and made again while the app was
   }
 });
 
-/** A server of its own with one table to edit, for the tests that change the database from outside. */
-async function startScratchServer(columns = 'a text, b text') {
-  const extra = await startE2eServer();
-  await extra.admin.query(
-    `CREATE TABLE public.scratch (id integer PRIMARY KEY, ${columns})`,
-  );
-  return extra;
-}
-
-const changes = (window: Page, n: number) =>
-  window.getByText(n === 1 ? '1 change' : `${n} changes`, { exact: true });
 /** Drags a toast out to the right, as a swipe would, and lets go. */
 async function swipeAway(window: Page, toast: Locator) {
   const box = (await toast.boundingBox())!;
@@ -1276,9 +1224,6 @@ async function swipeAway(window: Page, toast: Locator) {
   await window.mouse.move(box.x + 400, y, { steps: 12 });
   await window.mouse.up();
 }
-
-const toastWith = (window: Page, text: string) =>
-  window.locator('[data-sonner-toast]').filter({ hasText: text });
 
 test('the SQL of the edits, run from outside, is taken: changes applied, and a new table keeps its place', async () => {
   test.setTimeout(120_000);
