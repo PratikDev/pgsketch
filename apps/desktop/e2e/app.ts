@@ -16,11 +16,12 @@ export const processEnv = (): Record<string, string> =>
 /**
  * Starts the built app in a data folder of its own, so that tests running side by side (and the
  * developer's own copy of the app) never share a database, a log or the single-instance lock.
+ * With `executablePath` it starts that program, a packaged build, instead of the app in `out/`.
  */
-export async function launchApp(dataDir?: string) {
+export async function launchApp(dataDir?: string, executablePath?: string) {
   const folder = dataDir ?? mkdtempSync(join(tmpdir(), 'pgsketch-e2e-'));
   const app = await electron.launch({
-    args: ['.'],
+    ...(executablePath ? { executablePath } : { args: ['.'] }),
     env: { ...processEnv(), PGSKETCH_DATA_DIR: folder },
   });
   const window = await app.firstWindow();
