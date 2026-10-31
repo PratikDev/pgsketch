@@ -1142,3 +1142,27 @@ The results (`sql/ValidateResults.tsx`) are a list beside the SQL, one row for e
 - The helpers that the e2e specs share (`zoomOf`, `zoomUntil`, `spot`, `rowOf`, `showTable`, `startScratchServer`, `changes`, `toastWith`) moved from `e2e/editor.spec.ts` to `e2e/canvas.ts` so that `e2e/sql.spec.ts` can use them; they are the same code.
 - `testSession()` in the renderer's `test-utils.ts` makes the open-database object for component tests.
 - A scratch table made by the test's admin user must be given to the app's user (`ALTER TABLE … OWNER TO`) before Validate on it can pass: the dry run really runs the `ALTER`, and Postgres refuses it to anyone but the owner, which is the right answer.
+
+## The .deb, its icon and desktop entry (P1)
+
+**Date & time:** 2026-11-01 01:27
+
+`apps/desktop/electron-builder.yml` builds one target, `deb`, with `pnpm --filter @pgsketch/desktop package` (a build with its type check, then `electron-builder --linux deb`), into `apps/desktop/dist/pgsketch_<version>_amd64.deb` (`dist/` is ignored). The package installs the program in `/opt/pgsketch`, a `pgsketch.desktop` entry (category Development and Database, with keywords for the menu's search) and the icon in every size from 16 to 512 pixels under `/usr/share/icons/hicolor/`. `desktopName` in `package.json` with `syncDesktopName` makes the window's app id match the entry, so a running window is shown under its icon.
+
+**The icon is `apps/desktop/build/icon.png`**, the folder electron-builder reads and AGENTS.md says holds the icons. It used to be `resources/icon.png`, used only for the window in development; the window now imports the same file, so there is one icon and not two to keep alike. It must be a square PNG of at least 512 × 512 pixels (electron-builder's minimum on Linux). The one in the repository is still the scaffold's placeholder.
+
+**The sizes in `build/icons/` are made from it** by `apps/desktop/scripts/make-icons.sh` (ffmpeg; run it again after changing the icon) and are committed. electron-builder installs a lone icon in the folder named for its own size, and the desktop themes stop looking at 512: the first build, from a 1024 × 1024 icon, put it in `hicolor/1024x1024/`, which nothing reads, so the menu showed no icon. A folder of `<size>x<size>.png` files (`linux.icon: build/icons`) gives one folder for each size.
+
+**Only what the main process needs at run time is in `dependencies`** (`@electron-toolkit/utils`, `pg`, `pg-connection-string`, `zod`); everything the renderer, the preload and core need is bundled into `out/` by Vite, so those packages (and `@pgsketch/core`, a workspace link to TypeScript source) moved to `devDependencies`. Otherwise electron-builder would copy all of them into the package, `shadcn` and its CLI included. The package metadata electron-builder asks for is in `package.json` (`description`, `homepage`, `author`, which is also the .deb's maintainer); the author line is the git identity of this repository and can be changed there. There is no `license` yet, so the package says `License: unknown`.
+
+**Dependencies of the .deb.** electron-builder's own list lacks the sound library the Electron binary links against, so a clean system (a container, a server with a forwarded display) installed the package and then failed to start. `libasound2t64 | libasound2` is added, in that order: on Ubuntu 24.04 `libasound2` is a virtual name, and apt took `liboss4-salsa-asound2`, a stub that has not got the functions, for it. A Debian system has no `libasound2t64` and takes `libasound2`. The windows-only build script of `electron-winstaller` is switched off in `pnpm-workspace.yaml`, like the other scripts that are not run.
+
+**Rationale:** the plan's P1 and its test. `apps/desktop/scripts/check-deb.sh` is that test: for `ubuntu:24.04` and `debian:12` it installs the `.deb` on a clean image, checks the program, desktop entry and icon, then starts the program as an ordinary user under Xvfb until its log says "pgsketch started". Docker's default seccomp profile stops Chromium making its sandbox, so the container runs with seccomp off; that is the container's, not the package's.
+
+## The packaging job and the packaged smoke test (P2)
+
+**Date & time:** 2026-11-01 01:27
+
+`e2e/packaged.spec.ts` launches a packaged build (Playwright's Electron launcher, with `executablePath` now an argument of `launchApp`) from `PGSKETCH_EXECUTABLE`, checks that `app.isPackaged` is true and the Connect screen is shown, then closes it and expects exit code 0. Without the variable the test skips, so the ordinary e2e run is not affected. The `package` job in `.github/workflows/ci.yml` builds the `.deb`, **installs it with apt** and runs the test against `/opt/pgsketch/pgsketch`, so the package itself, and not just the unpacked folder, is what is checked; it then uploads the `.deb` as an artifact. Locally: `PGSKETCH_EXECUTABLE=$PWD/dist/linux-unpacked/pgsketch pnpm exec playwright test e2e/packaged.spec.ts` after packaging.
+
+**Rationale:** the plan's P2. The job has not been run on GitHub from here; the same steps were run locally against the unpacked build, and the install against clean images by P1's script.

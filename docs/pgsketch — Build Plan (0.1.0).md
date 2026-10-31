@@ -854,8 +854,8 @@ J7 changes four files, and deletes the old `connect-form.ts` and `TextField.tsx`
 
 | # | Phase | Files | Test | Status |
 | --- | --- | --- | --- | --- |
-| P1 | `.deb` config, icon and desktop entry | `electron-builder.yml` | The built `.deb` installs on a clean Debian-based system and launches | todo |
-| P2 | CI packaging job with packaged-app smoke test | `ci.yml` | Packaged app opens the Connect screen and quits cleanly | todo |
+| P1 | `.deb` config, icon and desktop entry | `electron-builder.yml`, `build/icon.png`, `build/icons/`, `scripts/check-deb.sh` | The built `.deb` installs on a clean Debian-based system and launches | done |
+| P2 | CI packaging job with packaged-app smoke test | `ci.yml` | Packaged app opens the Connect screen and quits cleanly | done |
 | P3 | README: install, usage, screenshots, architecture | `README.md` | Reviewed against a fresh install | todo |
 | P4 | Tag 0.1.0 and publish the GitHub Release | none | `.deb` downloadable from the release | todo |
 
