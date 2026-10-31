@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { schemaStore } from '@/stores/schema';
 import { uiStore } from '@/stores/ui';
 import { fixtureModel } from '@/test-model';
-import { installFakeApi } from '@/test-utils';
+import { installFakeApi, testSession } from '@/test-utils';
 import { SqlPanel } from './SqlPanel';
 
 const casts = { categories: {}, domains: {}, casts: {} };
@@ -19,7 +19,9 @@ function setup(onSchemaChanged: () => Promise<void> = async () => undefined) {
     'schema.fingerprint': () => database.fingerprint,
     'schema.casts': () => casts,
   });
-  render(<SqlPanel dbName="app" onSchemaChanged={onSchemaChanged} />);
+  render(
+    <SqlPanel session={testSession()} onSchemaChanged={onSchemaChanged} />,
+  );
   return {
     database,
     calls,
@@ -150,7 +152,12 @@ describe('SqlPanel', () => {
         throw new Error('connection lost');
       },
     });
-    render(<SqlPanel dbName="app" onSchemaChanged={async () => undefined} />);
+    render(
+      <SqlPanel
+        session={testSession()}
+        onSchemaChanged={async () => undefined}
+      />,
+    );
     expect(await screen.findByRole('alert')).toHaveTextContent(
       "Couldn't generate the SQL: connection lost",
     );

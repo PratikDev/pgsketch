@@ -60,7 +60,7 @@ export function Editor({
         {load.status === 'ready' && <Canvas />}
       </div>
       {sqlOpen && load.status === 'ready' && (
-        <SqlPanel dbName={session.database} onSchemaChanged={onSchemaChanged} />
+        <SqlPanel session={session} onSchemaChanged={onSchemaChanged} />
       )}
     </main>
   );
