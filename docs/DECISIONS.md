@@ -1176,3 +1176,15 @@ The results (`sql/ValidateResults.tsx`) are a list beside the SQL, one row for e
 **The screenshots are taken by a test, not by hand.** `apps/desktop/e2e/screenshots.spec.ts` starts the app on the fixture every core test uses (three tables over two schemas), makes two edits and validates them, and writes `connect.png`, `canvas.png` and `sql.png` into `docs/screenshots/` at 1280 × 800. It skips unless `PGSKETCH_SCREENSHOTS` is set, so the normal e2e run does not touch the pictures, and they can be made again when the screens change.
 
 **Rationale:** the plan's P3. A picture taken by hand goes out of date with the first change to a screen and nobody remembers how it was made; a test that makes them also fails when the flow it shows stops working.
+
+## The 0.1.0 release (P4)
+
+**Date & time:** 2026-11-01 06:10
+
+Release `v0.1.0` is at https://github.com/PratikDev/pgsketch/releases/tag/v0.1.0, tagged on `001cdca` (the commit that added the README), with `pgsketch_0.1.0_amd64.deb` attached.
+
+**The attached `.deb` is the one the CI `package` job built for that commit**, taken from the run's artifact, and not one built on a developer machine. That job had installed it with apt and run the packaged smoke test on the same commit, so the file that was tested is the file that is published. The tag was made only after every job of that run (lint, types, unit, the database tests on Postgres 14 to 18, the e2e tests and the packaging job) had passed. The file downloaded from the release page is byte for byte the CI artifact.
+
+**The notes are short on purpose:** what it is, the install command, the systems it was tested on, and a link to the README for the rest. The release has no licence to state, as the repository has none yet.
+
+**Rationale:** the plan's P4. Releasing the tested file, not a rebuild of it, is what makes "tested" mean something for the download.
