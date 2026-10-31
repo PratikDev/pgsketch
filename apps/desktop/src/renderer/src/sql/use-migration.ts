@@ -5,6 +5,7 @@ import { generateBlocker } from '@/chrome/generate-state';
 import { derived, type OpRisk } from '@/stores/derived';
 import { schemaStore, useSchemaStore } from '@/stores/schema';
 import { useUiStore } from '@/stores/ui';
+import { messageOf } from '@/lib/errors';
 
 export type MigrationState =
   /** Being made: checking the database, reading the casts, rendering. */
@@ -84,7 +85,7 @@ export function useMigration(
       if (current)
         setState({
           status: 'failed',
-          message: error instanceof Error ? error.message : String(error),
+          message: messageOf(error),
         });
     });
     return () => {

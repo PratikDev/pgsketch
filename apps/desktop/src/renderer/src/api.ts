@@ -39,6 +39,11 @@ export const api = {
     normalize: (request: IpcInputs['expr.normalize']) =>
       call('expr.normalize', request),
   },
+  sql: {
+    validate: (request: IpcInputs['sql.validate']) =>
+      call('sql.validate', request),
+    save: (request: IpcInputs['sql.save']) => call('sql.save', request),
+  },
   draft: {
     get: (dbKey: string) => call('draft.get', { dbKey }),
     put: (dbKey: string, draft: Draft) => call('draft.put', { dbKey, draft }),

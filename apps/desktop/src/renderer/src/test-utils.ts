@@ -3,6 +3,7 @@ import type {
   IpcResults,
   IpcArgs,
   PgsketchApi,
+  SessionInfo,
 } from '../../shared/ipc-contract';
 
 type Handlers = {
@@ -24,3 +25,14 @@ export function installFakeApi(handlers: Handlers) {
   window.api = { invoke, on: () => () => undefined };
   return calls;
 }
+
+/** An open database on this machine, with whatever a test wants different. */
+export const testSession = (over: Partial<SessionInfo> = {}): SessionInfo => ({
+  serverVersion: '16.4',
+  database: 'app',
+  host: 'localhost',
+  hostKind: 'local',
+  dbKey: 'k',
+  saved: null,
+  ...over,
+});

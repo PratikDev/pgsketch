@@ -3,15 +3,14 @@ import { api } from '@/api';
 import { derived } from '@/stores/derived';
 import { schemaStore } from '@/stores/schema';
 import { uiStore } from '@/stores/ui';
+import { messageOf } from '@/lib/errors';
 
 /** Reads the schema again and drops the edits: what the database has is what there is. */
 export async function reloadSchema(): Promise<void> {
   try {
     schemaStore.getState().load(await api.schema.load());
   } catch (error) {
-    toast.error(
-      `Couldn't reload the schema: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    toast.error(`Couldn't reload the schema: ${messageOf(error)}`);
   }
 }
 

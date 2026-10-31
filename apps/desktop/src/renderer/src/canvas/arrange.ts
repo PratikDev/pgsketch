@@ -5,6 +5,7 @@ import { schemaStore } from '@/stores/schema';
 import { uiStore } from '@/stores/ui';
 import { tableViews, unionOf } from './model-view';
 import { linksOf } from './use-auto-layout';
+import { messageOf } from '@/lib/errors';
 
 /**
  * Lays out every table again, the ones already placed too, and fits them in the view. The layout
@@ -24,8 +25,6 @@ export async function arrangeAll(): Promise<void> {
     layoutStore.getState().place(placed);
     uiStore.getState().requestFit();
   } catch (error) {
-    toast.error(
-      `Couldn't arrange the tables: ${error instanceof Error ? error.message : String(error)}`,
-    );
+    toast.error(`Couldn't arrange the tables: ${messageOf(error)}`);
   }
 }
