@@ -8,6 +8,7 @@ import { redact } from '../log';
 import { ConnectionError } from '../services/errors';
 import { createNormalizer } from '../services/normalizer';
 import { startPoller } from '../services/poller';
+import { createValidator } from '../services/validator';
 import { SecretsUnavailableError } from '../services/secrets';
 import {
   dbKeyFor,
@@ -61,13 +62,21 @@ export function registerConnection(ipc: IpcRegistry, deps: IpcDeps): void {
       const normalizer = createNormalizer((onLost) =>
         deps.openTask(params, { onLost }),
       );
+      // a dry run opens one of its own for each run
+      const validator = createValidator(() => deps.openTask(params));
       // and the database is looked at for changes made from outside
       const poller = startPoller(
         () => fingerprint(connection.query),
         () => emit('schema:changed'),
         deps.pollMs,
       );
-      await session.replace({ connection, normalizer, poller, info });
+      await session.replace({
+        connection,
+        normalizer,
+        validator,
+        poller,
+        info,
+      });
       last = { params, saved };
       return info;
     } catch (error) {

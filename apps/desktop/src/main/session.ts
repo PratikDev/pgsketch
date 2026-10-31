@@ -2,11 +2,14 @@ import type { SessionInfo } from '../shared/ipc-contract';
 import type { ServerConnection } from './services/connection';
 import type { Normalizer } from './services/normalizer';
 import type { Poller } from './services/poller';
+import type { Validator } from './services/validator';
 
 export interface ActiveSession {
   connection: ServerConnection;
   /** Normalizes expressions on a connection of its own, which closes with the session. */
   normalizer: Normalizer;
+  /** Dry-runs migrations, each on a connection of its own that closes when the run ends. */
+  validator: Validator;
   /** Looks for changes made to the database from outside, until the session ends. */
   poller: Poller;
   info: SessionInfo;

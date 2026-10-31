@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { startServer, type TestServer } from '../../../test/postgres';
 import { fakeIpc } from '../ipc/fake-ipc';
 import { registerSchema } from '../ipc/schema';
-import { fakePoller, testDeps } from '../ipc/test-deps';
+import { fakePoller, fakeValidator, testDeps } from '../ipc/test-deps';
 import { openConnection, type ServerConnection } from './connection';
 import { loadSchema } from './introspector';
 import { createNormalizer } from './normalizer';
@@ -76,6 +76,7 @@ describe('loadSchema', () => {
       connection,
       normalizer: createNormalizer(() => Promise.reject(new Error('unused'))),
       poller: fakePoller(),
+      validator: fakeValidator(),
       info: {
         serverVersion: '16',
         database: 'x',
@@ -98,6 +99,7 @@ describe('loadSchema', () => {
       connection,
       normalizer: createNormalizer(() => Promise.reject(new Error('unused'))),
       poller: fakePoller(),
+      validator: fakeValidator(),
       info: {
         serverVersion: '16',
         database: 'x',

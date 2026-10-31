@@ -1,7 +1,14 @@
 import { mkdirSync } from 'node:fs';
 import { userInfo } from 'node:os';
 import { join } from 'node:path';
-import { app, BrowserWindow, ipcMain, safeStorage, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  safeStorage,
+  shell,
+} from 'electron';
 import { electronApp, is, optimizer } from '@electron-toolkit/utils';
 import icon from '../../resources/icon.png?asset';
 import type { EmitEvent } from './ipc/deps';
@@ -12,10 +19,12 @@ import { createSession } from './session';
 import { openConnection } from './services/connection';
 import { POLL_INTERVAL_MS } from './services/poller';
 import { openTaskConnection } from './services/task-connection';
+import { createFiles } from './services/files';
 import { createSecrets } from './services/secrets';
 import { createConnectionsRepo } from './store/connections';
 import { createDraftsRepo } from './store/drafts';
 import { createLayoutsRepo } from './store/layouts';
+import { createSettingsRepo } from './store/settings';
 import { openAppDb } from './store/db';
 
 // Before anything else: where the app keeps its files, which is also Electron's user data folder,
@@ -96,6 +105,17 @@ if (!app.requestSingleInstanceLock()) {
       layouts: createLayoutsRepo(db),
       drafts: createDraftsRepo(db),
       secrets: createSecrets(safeStorage, () => app.isReady()),
+      files: createFiles({
+        settings: createSettingsRepo(db),
+        defaultFolder: () => app.getPath('documents'),
+        showSaveDialog: (options) => {
+          const window = BrowserWindow.getFocusedWindow();
+          const filters = [{ name: 'SQL', extensions: ['sql'] }];
+          return window
+            ? dialog.showSaveDialog(window, { ...options, filters })
+            : dialog.showSaveDialog({ ...options, filters });
+        },
+      }),
       session,
       emit,
       open: openConnection,

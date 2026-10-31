@@ -3,6 +3,9 @@ import type { IpcEvent } from '../../shared/ipc-contract';
 import { createSession } from '../session';
 import type { ServerConnection } from '../services/connection';
 import type { Poller } from '../services/poller';
+import type { Validator } from '../services/validator';
+import { createFiles } from '../services/files';
+import { createSettingsRepo } from '../store/settings';
 import { createSecrets, type SafeStorageLike } from '../services/secrets';
 import { openAppDb } from '../store/db';
 import { createConnectionsRepo } from '../store/connections';
@@ -31,6 +34,11 @@ export const fakePoller = (): Poller => ({
   stop: vi.fn(),
 });
 
+/** A validator whose runs pass nothing and need no server. */
+export const fakeValidator = (): Validator => ({
+  validate: vi.fn(async () => ({ status: 'done' as const, results: [] })),
+});
+
 /** A keyring that "encrypts" by reversing the bytes, with the backend to choose. */
 export function fakeSafeStorage(
   backend: ReturnType<
@@ -54,6 +62,12 @@ export function testDeps(over: Partial<IpcDeps> = {}) {
     layouts: createLayoutsRepo(db),
     drafts: createDraftsRepo(db),
     secrets: createSecrets(fakeSafeStorage(), () => true),
+    files: createFiles({
+      settings: createSettingsRepo(db),
+      defaultFolder: () => '/home/tester',
+      showSaveDialog: async () => ({ canceled: true, filePath: '' }),
+      write: async () => undefined,
+    }),
     session: createSession(),
     emit: (event, ...payload) => {
       events.push({ event, payload: payload[0] });

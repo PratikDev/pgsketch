@@ -1,5 +1,6 @@
 import type { IpcEvent, IpcEvents } from '../../shared/ipc-contract';
 import type { Session } from '../session';
+import type { Files } from '../services/files';
 import type { openConnection } from '../services/connection';
 import type { Secrets } from '../services/secrets';
 import type { openTaskConnection } from '../services/task-connection';
@@ -19,6 +20,7 @@ export interface IpcDeps {
   layouts: LayoutsRepo;
   drafts: DraftsRepo;
   secrets: Secrets;
+  files: Files;
   session: Session;
   emit: EmitEvent;
   /** The way connections are opened; tests pass one that needs no server. */
