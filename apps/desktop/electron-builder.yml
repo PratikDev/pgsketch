@@ -1,0 +1,38 @@
+appId: io.github.pratikdev.pgsketch
+productName: pgsketch
+directories:
+  buildResources: build
+  output: dist
+# the renderer and preload are bundled into out/, and so are core and the dev tooling: only the
+# runtime dependencies of the main process (see package.json) go in beside them
+files:
+  - out/**
+  - package.json
+linux:
+  target:
+    - deb
+  executableName: pgsketch
+  icon: build/icons
+  # the name the window has on the desktop (package.json `desktopName`), so a running window is
+  # matched to its menu entry
+  syncDesktopName: true
+  category: Development;Database;
+  desktop:
+    entry:
+      Keywords: postgres;postgresql;schema;sql;migration;
+artifactName: pgsketch_${version}_${arch}.${ext}
+deb:
+  # electron-builder's own list, plus the sound library Electron links against, which a desktop
+  # system has and a clean one (a container, a server with a forwarded display) does not. The
+  # renamed package comes first: on Ubuntu 24.04 `libasound2` is only a name that a stub can take
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+    - libasound2t64 | libasound2
