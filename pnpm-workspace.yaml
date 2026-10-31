@@ -3,5 +3,6 @@ packages:
   - apps/*
 allowBuilds:
   cpu-features: false
+  electron-winstaller: false
   protobufjs: false
   ssh2: false
