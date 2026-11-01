@@ -2,7 +2,7 @@
 
 pgsketch is a Linux desktop app for changing a Postgres schema on a diagram. You connect to a database, edit its tables on a canvas, and pgsketch writes the migration SQL for what you changed. **It never applies anything to your database**: you copy or save the SQL and run it yourself.
 
-![The canvas, showing three tables and their foreign keys](docs/screenshots/canvas.png)
+![PGSketch App Icon](apps/desktop//build//icon.png)
 
 ## Install
 
@@ -34,6 +34,8 @@ Connect with host, port, user and password, with a connection string, or through
 Tick **Remember this connection** to save it. The password is encrypted with your system keyring, is kept by the main process only, and never reaches the interface. Without a keyring the connection is saved without its password, and pgsketch says so.
 
 ### Edit
+
+![The canvas, showing three tables and their foreign keys](docs/screenshots/canvas.png)
 
 Every schema that is not a system schema is drawn as a table node, with its foreign keys as lines between them. Use **Schemas** to show only some, and **Auto-arrange** to lay the tables out again; positions are otherwise kept for each database.
 
