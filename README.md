@@ -2,7 +2,7 @@
 
 pgsketch is a Linux desktop app for changing a Postgres schema on a diagram. You connect to a database, edit its tables on a canvas, and pgsketch writes the migration SQL for what you changed. **It never applies anything to your database**: you copy or save the SQL and run it yourself.
 
-![PGSketch App Icon](apps/desktop//build//icon.png)
+![PGSketch App Icon](apps/desktop/build/icon.png)
 
 ## Install
 
