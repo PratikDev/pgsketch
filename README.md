@@ -91,8 +91,12 @@ You need Node 24, pnpm, and Docker for the database tests.
 
 ```bash
 pnpm install
-pnpm --filter @pgsketch/desktop dev
+pnpm dev
 ```
+
+`pnpm dev` starts the app with hot reload. `pnpm dev:tmp` does the same with an empty data folder made for that run, so your saved connections and drafts are untouched (and, as it has its own single-instance lock, it can run beside an installed pgsketch).
+
+To have a database to open, `pnpm db:setup` starts a throwaway Postgres 16 in Docker and loads the schema the screenshots use (`basic.sql`) into a database called `pgsketch`. Connect with host `localhost`, port `5432`, user `postgres`, password `test`. Set `PG_VERSION` or `PG_PORT` to change the server. `pnpm db:up`, `pnpm db:load` (which recreates the database, so it can be run again) and `pnpm db:down` (which removes the server and its data) are the steps on their own.
 
 | Command                                    | What it does                                                                           |
 | ------------------------------------------ | -------------------------------------------------------------------------------------- |
