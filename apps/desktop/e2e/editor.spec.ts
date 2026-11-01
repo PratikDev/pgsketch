@@ -11,6 +11,7 @@ import {
   spot,
   startScratchServer,
   toastWith,
+  tooltip,
   zoomOf,
   zoomUntil,
 } from './canvas';
@@ -505,6 +506,24 @@ test('the toolbar stays while the pointer moves from the table up to it', async 
   }
   await add.click();
   await expect(table.getByRole('listitem')).toHaveCount(5);
+  await app.close();
+});
+
+test('a toolbar button says what it does in a tooltip, and the toolbar stays under it', async () => {
+  const { app, window } = await openEditor('billing.line_items');
+  const table = window.getByRole('region', { name: 'billing.line_items' });
+  const header = (await table.locator('header').boundingBox())!;
+  await window.mouse.move(header.x + 60, header.y + header.height / 2);
+  const add = window.getByRole('button', { name: 'Add column' });
+  await expect(add).toBeVisible();
+  const target = (await add.boundingBox())!;
+  await window.mouse.move(
+    target.x + target.width / 2,
+    target.y + target.height / 2,
+    { steps: 40 },
+  );
+  await expect(tooltip(window)).toHaveText('Add column');
+  await expect(add).toBeVisible();
   await app.close();
 });
 
@@ -1440,9 +1459,9 @@ test('when the connection is lost the banner says so, keeps the edits, and recon
     // no SQL while the connection is down
     const generate = window.getByRole('button', { name: 'Generate SQL' });
     await expect(generate).toBeDisabled();
-    expect(await generate.locator('..').getAttribute('title')).toMatch(
-      /connection .* lost/,
-    );
+    // a disabled button has no pointer, so the reason is said on hover of what it sits in
+    await generate.locator('..').hover();
+    await expect(tooltip(window)).toHaveText(/connection .* lost/);
 
     await window.getByRole('button', { name: 'Reconnect' }).click();
     await expect(lost).toHaveCount(0);
@@ -1486,11 +1505,14 @@ test('the top bar counts the changes and the risky ones, switches Generate SQL o
   const { app, window } = await openEditor('billing.line_items');
   const table = 'billing.line_items';
   const generate = window.getByRole('button', { name: 'Generate SQL' });
-  // a disabled button has no tooltip of its own, so the reason is on what it sits in
-  const reason = () => generate.locator('..').getAttribute('title');
+  // a disabled button has no pointer, so the reason is said on hover of what it sits in
+  const reason = async () => {
+    await generate.locator('..').hover();
+    return tooltip(window);
+  };
   await expect(window.getByText(/on .* · Postgres \d+/)).toBeVisible();
   await expect(generate).toBeDisabled();
-  expect(await reason()).toMatch(/no changes/);
+  await expect(await reason()).toHaveText(/no changes/);
   await expect(window.getByText('0 changes', { exact: true })).toBeVisible();
 
   // a name a column of the table has already is an error
@@ -1499,7 +1521,7 @@ test('the top bar counts the changes and the risky ones, switches Generate SQL o
   await window.keyboard.type('issued');
   await window.keyboard.press('Tab');
   await expect(generate).toBeDisabled();
-  expect(await reason()).toMatch(/Fix this first/);
+  await expect(await reason()).toHaveText(/Fix this first/);
 
   // another name, and it is a change, a risky one: code that uses the old name breaks
   await window
@@ -1511,7 +1533,7 @@ test('the top bar counts the changes and the risky ones, switches Generate SQL o
   await window.keyboard.type('tag');
   await window.keyboard.press('Tab');
   await expect(generate).toBeEnabled();
-  expect(await reason()).toBeNull();
+  await expect(await reason()).toHaveCount(0);
   await expect(window.getByText('1 change', { exact: true })).toBeVisible();
   await expect(window.getByText(/· 1 breaks app code/)).toBeVisible();
 

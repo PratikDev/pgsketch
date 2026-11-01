@@ -66,3 +66,7 @@ export const changes = (window: Page, n: number) =>
 
 export const toastWith = (window: Page, text: string) =>
   window.locator('[data-sonner-toast]').filter({ hasText: text });
+
+/** The tooltip that is showing; one that is on its way out, as the pointer goes on to the next button, is not. */
+export const tooltip = (window: Page) =>
+  window.locator('[data-slot="tooltip-content"]:not([data-state="closed"])');
