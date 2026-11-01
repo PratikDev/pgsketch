@@ -1198,3 +1198,45 @@ The root `package.json` has `dev` (the desktop app with hot reload), `dev:tmp` (
 **The database steps are one script,** `apps/desktop/scripts/dev-db.sh up|load|down`, next to the other scripts, and the `package.json` entries only call it: waiting for the server and recreating a database are too long for a one-line script. `up` starts `postgres:$PG_VERSION` (16 by default) detached as `pgsketch-dev-pg` on `$PG_PORT` (5432 by default, so the Connect form's own default works) with user `postgres` and password `test`, and returns once the server takes connections. The image starts a temporary server to set itself up and then the real one, and `pg_isready` answers on the first, so `up` waits for the second "ready to accept connections" in the log. `load` drops and creates a database called `pgsketch` and loads `packages/core/test/fixtures/basic.sql`, the same fixture the core tests and the README screenshots use, into it; it can be run again at any time, and it leaves the `postgres` database alone. `down` removes the container, and the data with it (it was started with `--rm`, with no volume).
 
 **Rationale:** one command each to get the app, a server and sample data, and the same sample data as everywhere else in the repository. The password `test` is for a container that exists only on the developer's machine.
+
+## Tooltips: shadcn `Tooltip` for the fixed labels, `title` still on the canvas rows
+
+**Date & time:** 2026-11-02 09:30
+
+The tooltips on the table toolbar, the PK, NN and UQ badges, the show-password button and Generate SQL are now shadcn's `Tooltip` (`components/ui/tooltip.tsx`, added with the CLI) and not the browser's `title`. The `title` attributes that say what changed on a row, a foreign key, a default, a comment, an index or a constraint (`ColumnRow`, `TableNode`, `NodeFooter`, `StubNode`, `DefaultPopover`, `CommentPopover`, `ExpressionInput`) are left as they were.
+
+**One wrapper, `components/Hint.tsx`,** is `<Hint label="…"><element/></Hint>`: a provider, a tooltip and a trigger around the element. Radix's tooltip throws without a provider, and one provider at the root would have meant every component test had to render inside it; each `Hint` carries its own, which costs only that the exit animation of one tooltip and the entrance of the next overlap while the pointer moves between buttons. It always renders the same tree and leaves out only the content when there is no label, so Generate SQL's tooltip (which comes and goes with its reason) never remounts the button.
+
+**A disabled element gets no pointer events**, so a tooltip on one never shows. Generate SQL already had its reason on the `span` around it, and the tooltip stays there; the badges are now inside a `span` of their own for the same reason, because the locked NN badge is the one whose reason matters ("NOT NULL: required by the primary key"), and the badge itself got `disabled:pointer-events-none`.
+
+**The rows were left out on purpose.** Every row of every table would get a provider, a tooltip and a trigger, which on a large schema is thousands of them, and nothing has measured what that costs the canvas. They can move over once that has been tried on a big schema. Their `title`s are also dynamic, multi-line text, which is where a styled tooltip would help most, so it is worth trying.
+
+**Tests:** the tests that read a title now hover and read the tooltip; `e2e/canvas.ts` has `tooltip(window)`, which skips one that is closing, as there are two on the page for a moment when the pointer goes from one button to the next. A new e2e test hovers a toolbar button on the real canvas, which is zoomed and where the toolbar is a React Flow `NodeToolbar`, to see that the tooltip shows outside both and does not take the toolbar away.
+
+**Rationale:** AGENTS.md asks for shadcn/ui wherever it fits. A native tooltip can't use the app's colors, shows after a long delay and not on keyboard focus.
+
+## Large-schema measurements, and what they say about the tooltips
+
+**Date & time:** 2026-11-02 11:10
+
+A generated schema (`public.t_1` … `t_N`: twelve columns each, an identity key, a unique column, a foreign key to an earlier table, an index) was opened in the built app in a 1280 × 800 window, once with the tooltips and once with `Hint` made a pass-through, to see what they cost. Numbers are from one run each on one machine, so they show size and not precision.
+
+| | 100 tables (1 200 rows) | 300 tables (3 600 rows) |
+| --- | --- | --- |
+| Connect until the layout is ready | 6 to 11 s | 14 to 17 s |
+| Pan zoomed out (compact nodes) | 60 fps | 60 fps |
+| DOM nodes zoomed out / zoomed in | 5 856 / 26 883 | 17 456 / 80 455 |
+| Tooltip triggers zoomed in | 3 606 | 10 801 |
+| Zoom into one table from far out | 7.5 s without, 9.2 s with | 16.8 s without, 19.9 s with |
+| Pan zoomed in, 15 moves | 162 s of long tasks without, 202 s with | did not finish in 15 minutes without; 430 s with (60 moves) |
+| Hover a table until its toolbar shows | 11.7 s without, 9.4 s with | not measured |
+
+**The tooltips are not the problem.** They add about 20 to 25 % to a zoom-in and a pan that are already unusable without them. A tooltip that opens takes about 0.2 s. The first group (toolbar, badges, password button, Generate SQL) stays as it is.
+
+**The problem is the canvas when zoomed in on many tables.** Zoomed out it is smooth, at both sizes. Zoomed in (70 % and more, where tables show their rows) it spends about 7 s of JavaScript and some seconds of style recalculation for each pointer move at only 1 200 rows. A CPU profile of a pan shows React rendering (`beginWork`, `updateFunctionComponent`, `jsxProd`) and a lot of garbage collection, and no layout; the cause was not found. Nothing subscribes to the viewport but the one `compact` boolean in `Canvas.tsx`, and React Flow does not draw only what is visible (`onlyRenderVisibleElements` is off), so every table is mounted whatever is on screen.
+
+**The fit stops at 10 %.** With 300 tables `fitView` reaches the canvas' `minZoom` of 0.1 and most tables are off screen, so a large schema can't be seen as a whole.
+
+**The rows' `title` tooltips stay as they are,** and cost nothing at all next to this. Moving them to `Tooltip` waits for the canvas to be fast zoomed in: 11 000 more triggers would not help.
+
+**Not done here:** finding and fixing what re-renders on a pan. That is a task of its own.
