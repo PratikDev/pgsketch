@@ -1,5 +1,6 @@
 import { Eye, EyeOff } from 'lucide-react';
 import { useState, type ComponentProps } from 'react';
+import { Hint } from '@/components/Hint';
 import {
   InputGroup,
   InputGroupAddon,
@@ -15,15 +16,16 @@ export function PasswordInput(props: Omit<ComponentProps<'input'>, 'type'>) {
     <InputGroup>
       <InputGroupInput type={visible ? 'text' : 'password'} {...props} />
       <InputGroupAddon align="inline-end">
-        <InputGroupButton
-          size="icon-xs"
-          aria-label={label}
-          aria-pressed={visible}
-          title={label}
-          onClick={() => setVisible((v) => !v)}
-        >
-          {visible ? <EyeOff /> : <Eye />}
-        </InputGroupButton>
+        <Hint label={label}>
+          <InputGroupButton
+            size="icon-xs"
+            aria-label={label}
+            aria-pressed={visible}
+            onClick={() => setVisible((v) => !v)}
+          >
+            {visible ? <EyeOff /> : <Eye />}
+          </InputGroupButton>
+        </Hint>
       </InputGroupAddon>
     </InputGroup>
   );

@@ -38,6 +38,11 @@ function Live({ columnId }: { columnId: string }) {
 const desired = () => schemaStore.getState().desired;
 const badge = (name: string) =>
   screen.getByRole('button', { name: new RegExp(`^${name}`) });
+/** What a badge says on hover; a disabled one has no pointer, so the hover is on the span around it. */
+async function reasonOf(name: string) {
+  await userEvent.hover(badge(name).parentElement!);
+  return (await screen.findByRole('tooltip')).textContent;
+}
 
 // c:20:2 is billing.invoices.user_id; c:10:1 is public.users.id (an identity column in a key)
 describe('the PK, NN and UQ switches', () => {
@@ -59,22 +64,18 @@ describe('the PK, NN and UQ switches', () => {
     expect(badge('PK')).toHaveAttribute('aria-pressed', 'true');
     expect(badge('NN')).toHaveAttribute('aria-pressed', 'true');
     expect(badge('NN')).toBeDisabled();
-    expect(badge('NN')).toHaveAttribute(
-      'title',
-      'NOT NULL: required by the primary key',
-    );
+    expect(await reasonOf('NN')).toBe('NOT NULL: required by the primary key');
     await userEvent.click(badge('PK'));
     expect(badge('PK')).toHaveAttribute('aria-pressed', 'false');
     expect(badge('NN')).toHaveAttribute('aria-pressed', 'true');
     expect(badge('NN')).toBeEnabled();
   });
 
-  test('NN is locked on an identity column', () => {
+  test('NN is locked on an identity column', async () => {
     act(() => schemaStore.getState().setPrimaryKey('c:10:1', false));
     render(<Live columnId="c:10:1" />);
     expect(badge('NN')).toBeDisabled();
-    expect(badge('NN')).toHaveAttribute(
-      'title',
+    expect(await reasonOf('NN')).toBe(
       'NOT NULL: required by the identity column',
     );
   });

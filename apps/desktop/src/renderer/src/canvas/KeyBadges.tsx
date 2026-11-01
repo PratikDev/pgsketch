@@ -1,3 +1,4 @@
+import { Hint } from '@/components/Hint';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { schemaStore } from '@/stores/schema';
@@ -16,23 +17,30 @@ function Toggle({
   title: string;
   onToggle: () => void;
 }) {
+  // the span takes the pointer for a disabled badge, which has none, so the reason still shows
   return (
-    <Badge
-      asChild
-      variant={on ? 'secondary' : 'outline'}
-      className={cn('px-1.5', !on && 'opacity-40')}
-    >
-      <button
-        type="button"
-        aria-pressed={on}
-        disabled={disabled}
-        title={title}
-        onClick={onToggle}
-        className="nodrag"
-      >
-        {label}
-      </button>
-    </Badge>
+    <Hint label={title}>
+      <span className="inline-flex">
+        <Badge
+          asChild
+          variant={on ? 'secondary' : 'outline'}
+          className={cn(
+            'px-1.5 disabled:pointer-events-none',
+            !on && 'opacity-40',
+          )}
+        >
+          <button
+            type="button"
+            aria-pressed={on}
+            disabled={disabled}
+            onClick={onToggle}
+            className="nodrag"
+          >
+            {label}
+          </button>
+        </Badge>
+      </span>
+    </Hint>
   );
 }
 

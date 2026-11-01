@@ -7,6 +7,7 @@ import {
   ShieldCheckIcon,
   Trash2Icon,
 } from 'lucide-react';
+import { Hint } from '@/components/Hint';
 import { Button } from '@/components/ui/button';
 import { showRefusal } from '@/lib/refusal';
 import { commentKey } from '@/editors/CommentPopover';
@@ -34,70 +35,76 @@ export function TableToolbar({
         className="nodrag flex gap-1 rounded-lg border border-border bg-card p-1 shadow-sm"
       >
         {removed ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Restore table"
-            title="Restore table"
-            onClick={() => schemaStore.getState().restoreTable(table.id)}
-          >
-            <RotateCcwIcon />
-          </Button>
+          <Hint label="Restore table">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Restore table"
+              onClick={() => schemaStore.getState().restoreTable(table.id)}
+            >
+              <RotateCcwIcon />
+            </Button>
+          </Hint>
         ) : (
           <>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Add column"
-              title="Add column"
-              onClick={() => addColumnAndEdit(table.id)}
-            >
-              <PlusIcon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Add index"
-              title="Add index"
-              onClick={() =>
-                uiStore.getState().startEditing(`${table.id}:index`)
-              }
-            >
-              <ListPlusIcon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Add check"
-              title="Add check"
-              onClick={() =>
-                uiStore.getState().startEditing(`${table.id}:check`)
-              }
-            >
-              <ShieldCheckIcon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Comment"
-              title="Comment"
-              onClick={() =>
-                uiStore.getState().startEditing(commentKey(table.id))
-              }
-            >
-              <MessageSquareIcon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Delete table"
-              title="Delete table"
-              onClick={() =>
-                showRefusal(schemaStore.getState().removeTable(table.id))
-              }
-            >
-              <Trash2Icon />
-            </Button>
+            <Hint label="Add column">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Add column"
+                onClick={() => addColumnAndEdit(table.id)}
+              >
+                <PlusIcon />
+              </Button>
+            </Hint>
+            <Hint label="Add index">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Add index"
+                onClick={() =>
+                  uiStore.getState().startEditing(`${table.id}:index`)
+                }
+              >
+                <ListPlusIcon />
+              </Button>
+            </Hint>
+            <Hint label="Add check">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Add check"
+                onClick={() =>
+                  uiStore.getState().startEditing(`${table.id}:check`)
+                }
+              >
+                <ShieldCheckIcon />
+              </Button>
+            </Hint>
+            <Hint label="Comment">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Comment"
+                onClick={() =>
+                  uiStore.getState().startEditing(commentKey(table.id))
+                }
+              >
+                <MessageSquareIcon />
+              </Button>
+            </Hint>
+            <Hint label="Delete table">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Delete table"
+                onClick={() =>
+                  showRefusal(schemaStore.getState().removeTable(table.id))
+                }
+              >
+                <Trash2Icon />
+              </Button>
+            </Hint>
           </>
         )}
       </div>

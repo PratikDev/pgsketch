@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { schemaStore } from '@/stores/schema';
@@ -22,8 +22,12 @@ const setup = (ready = true, onDisconnect = vi.fn()) => {
   return onDisconnect;
 };
 const generate = () => screen.getByRole('button', { name: 'Generate SQL' });
-/** What holds Generate SQL, which is on what it sits in: a disabled button has no tooltip of its own. */
-const why = () => generate().parentElement!.getAttribute('title');
+/** What holds Generate SQL, said on hover: a disabled button has no pointer, so the hover is on what it sits in. */
+const hover = () => userEvent.hover(generate().parentElement!);
+const why = async () => {
+  await hover();
+  return (await screen.findByRole('tooltip')).textContent;
+};
 
 beforeEach(() =>
   act(() =>
@@ -50,16 +54,16 @@ describe('TopBar', () => {
     expect(screen.getByRole('heading', { name: 'Editor' })).toBeInTheDocument();
   });
 
-  test('Generate SQL is off with no changes, and says why', () => {
+  test('Generate SQL is off with no changes, and says why', async () => {
     setup();
     expect(generate()).toBeDisabled();
-    expect(why()).toMatch(/no changes/);
+    expect(await why()).toMatch(/no changes/);
   });
 
-  test('Generate SQL is off while the schema is loading', () => {
+  test('Generate SQL is off while the schema is loading', async () => {
     setup(false);
     expect(generate()).toBeDisabled();
-    expect(why()).toMatch(/loading/);
+    expect(await why()).toMatch(/loading/);
     expect(screen.getByRole('button', { name: 'Reload' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Auto-arrange' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Disconnect' })).toBeEnabled();
@@ -69,32 +73,35 @@ describe('TopBar', () => {
     act(() => schemaStore.getState().renameTable('t:10', 'people'));
     setup();
     expect(generate()).toBeEnabled();
-    expect(why()).toBeNull();
+    await hover();
+    expect(screen.queryByRole('tooltip')).toBeNull();
     await userEvent.click(generate());
     expect(uiStore.getState().sqlPanelOpen).toBe(true);
   });
 
-  test('Generate SQL is off while an edit has an error, and names it', () => {
+  test('Generate SQL is off while an edit has an error, and names it', async () => {
     act(() => schemaStore.getState().renameTable('t:10', ''));
     setup();
     expect(generate()).toBeDisabled();
-    expect(why()).toMatch(/Fix this first: .*empty/);
+    expect(await why()).toMatch(/Fix this first: .*empty/);
   });
 
-  test('Generate SQL is off while the schema is stale or the connection is lost', () => {
+  test('Generate SQL is off while the schema is stale or the connection is lost', async () => {
     act(() => {
       schemaStore.getState().renameTable('t:10', 'people');
       schemaStore.getState().markStale();
     });
     setup();
     expect(generate()).toBeDisabled();
-    expect(why()).toMatch(/changed outside pgsketch/);
+    expect(await why()).toMatch(/changed outside pgsketch/);
     act(() => {
       schemaStore.getState().clearStale();
       uiStore.getState().setConnectionLost('gone');
     });
     expect(generate()).toBeDisabled();
-    expect(why()).toMatch(/connection .* lost/);
+    await waitFor(async () =>
+      expect(await why()).toMatch(/connection .* lost/),
+    );
   });
 
   test('counts the changes, and the risky ones by kind', () => {

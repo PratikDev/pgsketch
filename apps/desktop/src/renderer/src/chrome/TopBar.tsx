@@ -1,4 +1,5 @@
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Hint } from '@/components/Hint';
 import { Button } from '@/components/ui/button';
 import { arrangeAll } from '@/canvas/arrange';
 import { useDerived } from '@/stores/derived';
@@ -61,15 +62,17 @@ export function TopBar({
         >
           Auto-arrange
         </Button>
-        {/* a disabled button shows no tooltip, so the reason is on what holds it */}
-        <span title={blocker ?? undefined}>
-          <Button
-            disabled={blocker !== null}
-            onClick={() => uiStore.getState().setSqlPanelOpen(true)}
-          >
-            Generate SQL
-          </Button>
-        </span>
+        {/* a disabled button gets no pointer, so the reason is on the span that holds it */}
+        <Hint label={blocker}>
+          <span>
+            <Button
+              disabled={blocker !== null}
+              onClick={() => uiStore.getState().setSqlPanelOpen(true)}
+            >
+              Generate SQL
+            </Button>
+          </span>
+        </Hint>
         <Button variant="outline" onClick={onDisconnect}>
           Disconnect
         </Button>
