@@ -5,6 +5,12 @@
   "type": "module",
   "packageManager": "pnpm@12.14.0",
   "scripts": {
+    "dev": "pnpm --filter @pgsketch/desktop dev",
+    "dev:tmp": "PGSKETCH_DATA_DIR=$(mktemp -d) pnpm --filter @pgsketch/desktop dev",
+    "db:up": "apps/desktop/scripts/dev-db.sh up",
+    "db:load": "apps/desktop/scripts/dev-db.sh load",
+    "db:setup": "pnpm db:up && pnpm db:load",
+    "db:down": "apps/desktop/scripts/dev-db.sh down",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "pnpm -r test",
