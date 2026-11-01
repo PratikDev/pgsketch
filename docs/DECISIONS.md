@@ -1188,3 +1188,13 @@ Release `v0.1.0` is at https://github.com/PratikDev/pgsketch/releases/tag/v0.1.0
 **The notes are short on purpose:** what it is, the install command, the systems it was tested on, and a link to the README for the rest. The release has no licence to state, as the repository has none yet.
 
 **Rationale:** the plan's P4. Releasing the tested file, not a rebuild of it, is what makes "tested" mean something for the download.
+
+## Root scripts for running the app and a dev database
+
+**Date & time:** 2026-11-01 07:00
+
+The root `package.json` has `dev` (the desktop app with hot reload), `dev:tmp` (the same with `PGSKETCH_DATA_DIR` set to a new `mktemp -d` folder, so each run starts with no saved connections or drafts and has its own single-instance lock, which lets it run beside an installed copy), and `db:up`, `db:load`, `db:setup` (both in order) and `db:down`.
+
+**The database steps are one script,** `apps/desktop/scripts/dev-db.sh up|load|down`, next to the other scripts, and the `package.json` entries only call it: waiting for the server and recreating a database are too long for a one-line script. `up` starts `postgres:$PG_VERSION` (16 by default) detached as `pgsketch-dev-pg` on `$PG_PORT` (5432 by default, so the Connect form's own default works) with user `postgres` and password `test`, and returns once the server takes connections. The image starts a temporary server to set itself up and then the real one, and `pg_isready` answers on the first, so `up` waits for the second "ready to accept connections" in the log. `load` drops and creates a database called `pgsketch` and loads `packages/core/test/fixtures/basic.sql`, the same fixture the core tests and the README screenshots use, into it; it can be run again at any time, and it leaves the `postgres` database alone. `down` removes the container, and the data with it (it was started with `--rm`, with no volume).
+
+**Rationale:** one command each to get the app, a server and sample data, and the same sample data as everywhere else in the repository. The password `test` is for a container that exists only on the developer's machine.
