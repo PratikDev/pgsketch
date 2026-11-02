@@ -720,6 +720,8 @@ test('a default is chosen from the presets of its type, and an identity column h
 
   // a constant is quoted, and Postgres says how it reads it
   const status = rowOf(window, 'public.users', 'status');
+  // the popover of the preset has gone before the next one opens: two at once have two Constant tabs
+  await expect(window.getByRole('tab', { name: 'Constant' })).toHaveCount(0);
   await status.getByRole('button', { name: /^Default/ }).click();
   await window.getByRole('tab', { name: 'Constant' }).click();
   await window.getByRole('textbox', { name: 'Constant' }).fill('banned');
