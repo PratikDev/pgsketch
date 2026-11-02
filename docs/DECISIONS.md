@@ -1266,3 +1266,22 @@ The README is now a guide to the whole project: why it exists, a tour with a pic
 - **The Windows plan is updated** to match: the licence row in its decisions table, the licence texts packaged with both installers (W6) and checked by the smoke tests (W8), the SignPath requirement met (W7), and the documentation item (W12).
 
 **Rationale:** a licence that says "free for any purpose" cannot cover a file whose own terms say otherwise, and a README film was never essential to the project.
+
+## Windows support: platform as an argument, one fact for the renderer, installers per user
+
+**Date & time:** 2026-11-02 21:39
+
+Built from `docs/pgsketch — Windows Support Plan.md` (phases W-A to W-D; the Windows CI jobs are in but have not run yet).
+
+- **The platform is a parameter, read once in `main/index.ts`.** `resolveAppPaths`, `defaultLogPath` and `createSecrets` take `platform` last and default to `process.platform`, as they already take `env`, `home` and `isReady`. Tests pass `linux`, `win32` and `darwin`, so every layout is tested on any machine. Paths use `node:path`'s `win32` and `posix` explicitly (`main/platform-paths.ts`), so a Windows path is built the same way on Linux CI.
+- **Windows keeps its data in `%LOCALAPPDATA%\pgsketch`** and the log in `logs\main.log` there. `%APPDATA%` roams between machines, which would carry an encrypted password to one that cannot decrypt it. Linux paths are unchanged.
+- **The keyring check is Linux-only.** `getSelectedStorageBackend()` is a Linux-only call in Electron, so it is never made elsewhere; on Windows and macOS `isEncryptionAvailable()` decides (DPAPI, Keychain). The weak-keyring refusal stays on Linux.
+- **The renderer learns about sockets from `connection.defaults`.** `socketPath` is `string | null`; Windows answers `null`, and the Connect screen leaves out the "Local socket" tab, and shows a saved socket connection disabled with the reason. Until the answer arrives there is no socket tab, so the tab appears a moment late on Linux. No new channel and no platform name in the renderer.
+- **`APP_ID` (`io.github.pratikdev.pgsketch`) replaces the template's `com.electron`** as the Windows app user model id, and a test keeps it equal to the `appId` in `electron-builder.yml`.
+- **The Windows installer is NSIS, per user, with the folder choosable,** and uninstalling keeps the saved connections and drafts, like `apt remove`. `LICENSE` and the Geist `OFL.txt` are copied next to the executable in both the Windows and the Linux packages (`extraFiles`), and `check-deb.sh` and the Windows smoke test check for them. The OFL text is read from the font package, not copied into the repository.
+- **`.gitattributes` sets `eol=lf`** so a Windows checkout does not fail `prettier --check`, or break the shell scripts.
+- **The dev scripts are TypeScript run by Node.** `dev:tmp` and the dev database (`up`, `load`, `down`) are `apps/desktop/scripts/dev-tmp.ts` and `dev-db.ts`, replacing `dev-db.sh` and the `mktemp` one-liner: no shell, so they run in bash, PowerShell and cmd. Node 24 strips the types itself; `scripts/package.json` marks that folder as ESM. The pure parts are unit-tested.
+- **The e2e launcher** starts `electron.exe` on Windows and passes `--no-sandbox` only on Linux. The Docker-based tests stay on Linux.
+- **Not done:** the README's Windows install text, signing, a release (W-F), and the manual pass on real Windows hardware (W-E).
+
+**Rationale:** the Windows differences are few and each has one cause; putting each behind an argument or a single response field keeps them testable here and keeps platform names out of the renderer.
