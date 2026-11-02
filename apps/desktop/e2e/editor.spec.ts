@@ -418,6 +418,9 @@ test('three columns are made with the keyboard alone, and one is deleted from it
 test('a double-click on the empty canvas makes a table at the cursor with its name ready', async () => {
   const { app, window } = await openEditor();
   await zoomUntil(window, false);
+  // the empty spot is looked for once the tables are drawn full size, or a table that grows
+  // into it would take the double-click
+  await expect(window.locator('.react-flow__node-compact')).toHaveCount(0);
   const at = await emptyPoint(window);
   await window.mouse.dblclick(at.x, at.y);
 
@@ -1500,9 +1503,19 @@ test('the top bar counts the changes and the risky ones, switches Generate SQL o
     await generate.locator('..').hover();
     return tooltip(window);
   };
+  // the same, for a reason that must be there: the pointer leaves and comes back until it is, as a
+  // hover that lands while the page is busy can be missed
+  const shownReason = async () => {
+    await expect(async () => {
+      await window.mouse.move(0, 0);
+      await generate.locator('..').hover();
+      await expect(tooltip(window)).toBeVisible({ timeout: 2_000 });
+    }).toPass();
+    return tooltip(window);
+  };
   await expect(window.getByText(/on .* · Postgres \d+/)).toBeVisible();
   await expect(generate).toBeDisabled();
-  await expect(await reason()).toHaveText(/no changes/);
+  await expect(await shownReason()).toHaveText(/no changes/);
   await expect(window.getByText('0 changes', { exact: true })).toBeVisible();
 
   // a name a column of the table has already is an error
@@ -1511,7 +1524,7 @@ test('the top bar counts the changes and the risky ones, switches Generate SQL o
   await window.keyboard.type('issued');
   await window.keyboard.press('Tab');
   await expect(generate).toBeDisabled();
-  await expect(await reason()).toHaveText(/Fix this first/);
+  await expect(await shownReason()).toHaveText(/Fix this first/);
 
   // another name, and it is a change, a risky one: code that uses the old name breaks
   await window
