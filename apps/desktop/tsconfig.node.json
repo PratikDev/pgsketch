@@ -5,6 +5,7 @@
     "vitest.config.*",
     "playwright.config.*",
     "e2e/**/*",
+    "scripts/**/*",
     "test/**/*",
     "src/main/**/*",
     "src/preload/**/*",
