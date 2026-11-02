@@ -1255,3 +1255,14 @@ The README is now a guide to the whole project: why it exists, a tour with a pic
 - **No licence section**: the repository has no `LICENSE` yet, and choosing one is not a README decision.
 
 **Rationale:** the old README said how to use the app and said nothing of what it is for or how it keeps your database safe, which is the whole point of the project.
+
+## The film and all music are removed, and the project is MIT
+
+**Date & time:** 2026-11-02 21:09
+
+- **`docs/media/pgsketch-friday.mp4` is deleted.** It carried a music track from a catalog whose terms are not known to this project, and the repository is meant to be fully open source and free to use: nothing in it may depend on a licence the project does not hold. No other audio file is in the repository. The animations are GIFs and so cannot carry sound, and `hero.gif` is silent. The README no longer links a film; it says `hero.gif` is cut from one that is not in the repository.
+- **The file is still in git history**, in the commit that added it (`cf66cd1`), which is on `origin/main`. Deleting it from the tree does not take it out of history. Removing it from history needs a rewrite and a force-push, which was not done.
+- **The licence is MIT.** `LICENSE` (Copyright (c) 2026 Pratik Dev), `"license": "MIT"` in the root, desktop and core `package.json`, and a README section. It is permissive, accepted by SignPath's free signing, and compatible with the dependencies: the main ones are MIT or ISC, Geist is OFL-1.1 (allowed to bundle, its text should ship with the app) and elkjs is `EPL-2.0 OR GPL-3.0-or-later`.
+- **The Windows plan is updated** to match: the licence row in its decisions table, the licence texts packaged with both installers (W6) and checked by the smoke tests (W8), the SignPath requirement met (W7), and the documentation item (W12).
+
+**Rationale:** a licence that says "free for any purpose" cannot cover a file whose own terms say otherwise, and a README film was never essential to the project.

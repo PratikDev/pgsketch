@@ -1,13 +1,12 @@
 # pgsketch
-<!-- <img align="right" width="132" src="apps/desktop/build/icon.png" alt="The pgsketch icon: a hand-inked elephant drawing two linked boxes with a pencil" /> -->
 
 [![PGSketch Logo](apps/desktop/build/icons/256x256.png)](apps/desktop/build/icons/256x256.png)
 
 pgsketch is a Linux desktop app for changing a Postgres schema on a diagram. You connect to a database, edit its tables on a canvas, and pgsketch writes the migration SQL for what you changed. **It never applies anything to your database.** You read the SQL, check it with a dry run if you like, and run it yourself.
 
-[![Two failed hand-typed ALTER TABLE statements at 17:58, then the same rename drawn on the canvas, the SQL written, and a dry run that keeps nothing](docs/media/hero.gif)](docs/media/pgsketch-friday.mp4)
+![Two failed hand-typed ALTER TABLE statements at 17:58, then the same rename drawn on the canvas, the SQL written, and a dry run that keeps nothing](docs/media/hero.gif)
 
-<sub>The first 22 seconds of [a 30-second film](docs/media/pgsketch-friday.mp4) made from recordings of the app. The two errors in the terminal are what Postgres 16 really answered.</sub>
+<sub>Cut from recordings of the app. The two errors in the terminal are what Postgres 16 really answered.</sub>
 
 ## Why it exists
 
@@ -215,8 +214,12 @@ Around it: unit tests for quoting, types, validation, the diff of every object k
 
 ### The pictures in this file
 
-The screenshots come from `PGSKETCH_SCREENSHOTS=1 pnpm --filter @pgsketch/desktop test:e2e e2e/screenshots.spec.ts`. The animations in `docs/media/` (all but the film and `hero.gif`) come from `PGSKETCH_RECORDINGS=1 pnpm --filter @pgsketch/desktop test:e2e e2e/recordings.spec.ts`, which drives the app and needs `ffmpeg`. The film, `docs/media/pgsketch-friday.mp4`, was edited from recordings of the same app on the same fixture, and `hero.gif` is its first 22 seconds. The icon in `apps/desktop/build/icon.png` is the source for the sizes in `build/icons/`; run `apps/desktop/scripts/make-icons.sh` after changing it.
+The screenshots come from `PGSKETCH_SCREENSHOTS=1 pnpm --filter @pgsketch/desktop test:e2e e2e/screenshots.spec.ts`. The animations in `docs/media/` (all but `hero.gif`) come from `PGSKETCH_RECORDINGS=1 pnpm --filter @pgsketch/desktop test:e2e e2e/recordings.spec.ts`, which drives the app and needs `ffmpeg`. `hero.gif` is cut from a short film made from recordings of the same app on the same fixture; the film is not in this repository. The icon in `apps/desktop/build/icon.png` is the source for the sizes in `build/icons/`; run `apps/desktop/scripts/make-icons.sh` after changing it.
 
 ## What is next
 
 0.2 brings enums, renaming and dropping schemas and moving tables between them, identity on existing columns, undo and redo, table search, impact numbers in the warnings (rows affected, nulls, duplicates, table size), and rebasing unsaved edits onto unrelated outside changes. 0.3: views and sequences as editable objects, partial and expression indexes, SSH tunnels. 0.4: several databases per window and export of the schema as an image or documentation. Later: a CLI built from `packages/core` to catch drift in CI, down migrations, and more platforms and package formats.
+
+## License
+
+pgsketch is released under the [MIT license](LICENSE): use it, change it and share it, for free, for any purpose. The Geist typeface in the app is bundled under the SIL Open Font License.
