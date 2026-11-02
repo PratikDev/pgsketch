@@ -34,7 +34,7 @@ describe('remembering a password', () => {
   test.each(['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'] as const)(
     'works with the %s keyring, and reads back',
     (backend) => {
-      const secrets = createSecrets(storage(backend), () => true);
+      const secrets = createSecrets(storage(backend), () => true, 'linux');
       expect(secrets.problem()).toBeNull();
       const encrypted = secrets.encrypt('hunter2');
       expect(Buffer.from(encrypted).toString()).not.toContain('hunter2');
@@ -46,7 +46,7 @@ describe('remembering a password', () => {
     'is refused with %s, and nothing is encrypted',
     (backend) => {
       const s = storage(backend);
-      const secrets = createSecrets(s, () => true);
+      const secrets = createSecrets(s, () => true, 'linux');
       expect(secrets.problem()).toBe('weak-backend');
       refused(() => secrets.encrypt('hunter2'), 'weak-backend');
       refused(() => secrets.decrypt(new Uint8Array([1])), 'weak-backend');
@@ -57,7 +57,7 @@ describe('remembering a password', () => {
 
   test('is refused when the system cannot encrypt at all', () => {
     const s = storage('gnome_libsecret', false);
-    const secrets = createSecrets(s, () => true);
+    const secrets = createSecrets(s, () => true, 'linux');
     expect(secrets.problem()).toBe('unavailable');
     refused(() => secrets.encrypt('x'), 'unavailable');
     expect(s.getSelectedStorageBackend).not.toHaveBeenCalled();
@@ -65,11 +65,13 @@ describe('remembering a password', () => {
 
   test('a backend that is not on the list is treated like basic_text', () => {
     const odd = storage('keyring_of_the_future' as Backend);
-    expect(createSecrets(odd, () => true).problem()).toBe('weak-backend');
+    expect(createSecrets(odd, () => true, 'linux').problem()).toBe(
+      'weak-backend',
+    );
   });
 
   test('the error says what is wrong without a password in it', () => {
-    const secrets = createSecrets(storage('basic_text'), () => true);
+    const secrets = createSecrets(storage('basic_text'), () => true, 'linux');
     try {
       secrets.encrypt('hunter2');
     } catch (error) {
@@ -83,7 +85,7 @@ describe('the keyring check', () => {
   test('never runs before the app is ready, and runs once it is', () => {
     const s = storage('gnome_libsecret');
     let ready = false;
-    const secrets = createSecrets(s, () => ready);
+    const secrets = createSecrets(s, () => ready, 'linux');
 
     expect(secrets.problem()).toBe('not-ready');
     refused(() => secrets.encrypt('x'), 'not-ready');
@@ -101,7 +103,7 @@ describe('the keyring check', () => {
     let backend: Backend = 'basic_text';
     const s = storage('basic_text');
     s.getSelectedStorageBackend.mockImplementation(() => backend);
-    const secrets = createSecrets(s, () => true);
+    const secrets = createSecrets(s, () => true, 'linux');
     expect(secrets.problem()).toBe('weak-backend');
     backend = 'kwallet6';
     expect(secrets.problem()).toBeNull();

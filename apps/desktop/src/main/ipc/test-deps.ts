@@ -61,7 +61,7 @@ export function testDeps(over: Partial<IpcDeps> = {}) {
     connections: createConnectionsRepo(db),
     layouts: createLayoutsRepo(db),
     drafts: createDraftsRepo(db),
-    secrets: createSecrets(fakeSafeStorage(), () => true),
+    secrets: createSecrets(fakeSafeStorage(), () => true, 'linux'),
     files: createFiles({
       settings: createSettingsRepo(db),
       defaultFolder: () => '/home/tester',

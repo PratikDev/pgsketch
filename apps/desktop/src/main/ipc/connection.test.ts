@@ -123,7 +123,11 @@ describe('open', () => {
 
   test('without a keyring the connection opens and is saved, the password is not, and it says so', async () => {
     const { call, deps } = setup({
-      secrets: createSecrets(fakeSafeStorage('basic_text'), () => true),
+      secrets: createSecrets(
+        fakeSafeStorage('basic_text'),
+        () => true,
+        'linux',
+      ),
     });
     const session = opened(
       await call('connection.open', { params, remember: true }),
@@ -135,7 +139,11 @@ describe('open', () => {
 
   test('a connection with no password to keep is not reported as losing one', async () => {
     const { call } = setup({
-      secrets: createSecrets(fakeSafeStorage('basic_text'), () => true),
+      secrets: createSecrets(
+        fakeSafeStorage('basic_text'),
+        () => true,
+        'linux',
+      ),
     });
     const socket: ConnectionParams = {
       kind: 'socket',
@@ -403,7 +411,11 @@ describe('saved connections', () => {
     const open = vi.fn(async () => fakeServerConnection());
     const { id, deps } = await remembered({ open });
     open.mockClear();
-    const weak = createSecrets(fakeSafeStorage('basic_text'), () => true);
+    const weak = createSecrets(
+      fakeSafeStorage('basic_text'),
+      () => true,
+      'linux',
+    );
     const ipc = fakeIpc();
     registerConnection(ipc, { ...deps, secrets: weak });
     const result = (await ipc.invoke('connection.openSaved', {

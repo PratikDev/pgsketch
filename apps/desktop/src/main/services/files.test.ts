@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { describe, expect, test, vi } from 'vitest';
 import { openAppDb } from '../store/db';
 import { createSettingsRepo } from '../store/settings';
@@ -30,8 +31,8 @@ describe('saving a migration', () => {
     ).toEqual({ status: 'saved', path: '/work/migrations/first.sql' });
     await files.save('SELECT 2;', '20260101_000100_pgsketch.sql');
     expect(asked).toEqual([
-      '/home/me/Documents/20260101_000000_pgsketch.sql',
-      '/work/migrations/20260101_000100_pgsketch.sql',
+      join('/home/me/Documents', '20260101_000000_pgsketch.sql'),
+      join('/work/migrations', '20260101_000100_pgsketch.sql'),
     ]);
     expect(written).toEqual([
       { path: '/work/migrations/first.sql', text: 'SELECT 1;' },
@@ -48,13 +49,13 @@ describe('saving a migration', () => {
     expect(await files.save('b', 'b.sql')).toEqual({ status: 'cancelled' });
     await files.save('c', 'c.sql');
     expect(written).toHaveLength(1);
-    expect(asked[2]).toBe('/work/c.sql');
+    expect(asked[2]).toBe(join('/work', 'c.sql'));
   });
 
   test('a suggested name can not pick a folder', async () => {
     const { files, asked } = setup([]);
     await files.save('x', '../../etc/passwd');
-    expect(asked).toEqual(['/home/me/Documents/passwd']);
+    expect(asked).toEqual([join('/home/me/Documents', 'passwd')]);
   });
 
   test("a file that can't be written is an error, and the folder is not remembered", async () => {

@@ -149,16 +149,16 @@ describe('the logger', () => {
 
 describe('where the log goes', () => {
   test('the path follows XDG_STATE_HOME when it is absolute, else the home folder', () => {
-    expect(defaultLogPath({}, '/home/me')).toBe(
+    expect(defaultLogPath({}, '/home/me', 'linux')).toBe(
       '/home/me/.local/state/pgsketch/main.log',
     );
-    expect(defaultLogPath({ XDG_STATE_HOME: '/state' }, '/home/me')).toBe(
-      '/state/pgsketch/main.log',
-    );
-    expect(defaultLogPath({ XDG_STATE_HOME: 'relative' }, '/home/me')).toBe(
-      '/home/me/.local/state/pgsketch/main.log',
-    );
-    expect(defaultLogPath({ XDG_STATE_HOME: '' }, '/home/me')).toBe(
+    expect(
+      defaultLogPath({ XDG_STATE_HOME: '/state' }, '/home/me', 'linux'),
+    ).toBe('/state/pgsketch/main.log');
+    expect(
+      defaultLogPath({ XDG_STATE_HOME: 'relative' }, '/home/me', 'linux'),
+    ).toBe('/home/me/.local/state/pgsketch/main.log');
+    expect(defaultLogPath({ XDG_STATE_HOME: '' }, '/home/me', 'linux')).toBe(
       '/home/me/.local/state/pgsketch/main.log',
     );
   });
@@ -187,6 +187,8 @@ describe('where the log goes', () => {
     expect(text).toBe(
       '1970-01-01T00:00:00.000Z INFO one\n1970-01-01T00:00:00.000Z INFO postgres://u:***@h/d\n',
     );
-    expect(statSync(path).mode & 0o777).toBe(0o600);
+    // Windows has no owner-only mode: the file is the user's own through the profile folder
+    if (process.platform !== 'win32')
+      expect(statSync(path).mode & 0o777).toBe(0o600);
   });
 });
