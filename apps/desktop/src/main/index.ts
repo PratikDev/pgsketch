@@ -20,6 +20,7 @@ import { openConnection } from './services/connection';
 import { POLL_INTERVAL_MS } from './services/poller';
 import { openTaskConnection } from './services/task-connection';
 import { createFiles } from './services/files';
+import { APP_ID } from '../shared/app-id';
 import { createSecrets } from './services/secrets';
 import { createConnectionsRepo } from './store/connections';
 import { createDraftsRepo } from './store/drafts';
@@ -88,8 +89,8 @@ if (!app.requestSingleInstanceLock()) {
   // initialization and is ready to create browser windows.
   // Some APIs can only be used after this event occurs.
   app.whenReady().then(() => {
-    // Set app user model id for windows
-    electronApp.setAppUserModelId('com.electron');
+    // The id Windows groups the taskbar icon and names notifications by
+    electronApp.setAppUserModelId(APP_ID);
 
     // Default open or close DevTools by F12 in development
     // and ignore CommandOrControl + R in production.
@@ -122,7 +123,8 @@ if (!app.requestSingleInstanceLock()) {
       openTask: openTaskConnection,
       pollMs: POLL_INTERVAL_MS,
       osUser: userInfo().username,
-      socketPath: '/var/run/postgresql',
+      // Postgres for Windows has no Unix socket, so the Connect screen does not offer one there
+      socketPath: process.platform === 'win32' ? null : '/var/run/postgresql',
     });
     log.info('pgsketch started', { dataDir: paths.dataDir });
 

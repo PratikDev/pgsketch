@@ -23,6 +23,10 @@ export function Connect({
 }) {
   const screen = useConnectScreen(onOpened);
   const { form, defaults, busy } = screen;
+  // the socket needs a system that has one
+  const modes = MODES.filter(
+    (m) => m.mode !== 'socket' || defaults.socketPath !== null,
+  );
   return (
     <main className="flex min-h-screen items-center justify-center p-6">
       <Card className="w-full max-w-xl">
@@ -34,6 +38,7 @@ export function Connect({
         <CardContent className="flex flex-col gap-6">
           <RecentConnections
             connections={screen.recent}
+            socketsAvailable={defaults.socketPath !== null}
             busy={busy}
             onOpen={screen.openRecent}
           />
@@ -50,7 +55,8 @@ export function Connect({
               listeners={{
                 // the local socket is let in by the operating system user, so there is no password
                 onChange: ({ value, fieldApi }) => {
-                  if (value !== 'socket') return;
+                  if (value !== 'socket' || defaults.socketPath === null)
+                    return;
                   fieldApi.form.setFieldValue('host', defaults.socketPath);
                   fieldApi.form.setFieldValue('user', defaults.osUser);
                   fieldApi.form.setFieldValue('password', '');
@@ -61,12 +67,12 @@ export function Connect({
                 <Tabs
                   value={field.state.value}
                   onValueChange={(value) => {
-                    const picked = MODES.find((m) => m.mode === value);
+                    const picked = modes.find((m) => m.mode === value);
                     if (picked) field.handleChange(picked.mode);
                   }}
                 >
                   <TabsList>
-                    {MODES.map(({ mode, label }) => (
+                    {modes.map(({ mode, label }) => (
                       <TabsTrigger key={mode} value={mode}>
                         {label}
                       </TabsTrigger>

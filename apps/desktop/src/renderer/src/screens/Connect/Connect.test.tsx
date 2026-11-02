@@ -82,11 +82,45 @@ describe('the form', () => {
   test('socket mode fills the operating system user and the socket directory, with no password', async () => {
     const { user } = setup();
     await user.type(field('Password'), 'secret');
-    await user.click(screen.getByRole('tab', { name: 'Local socket' }));
+    await user.click(await screen.findByRole('tab', { name: 'Local socket' }));
     await waitFor(() => expect(field('User')).toHaveValue('tester'));
     expect(field('Socket directory')).toHaveValue('/var/run/postgresql');
     expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
     expect(sslMode()).toHaveTextContent('disable');
+  });
+
+  test('where the system has no sockets there is no socket mode, and a socket connection cannot be opened', async () => {
+    const calls = installFakeApi({
+      'connection.defaults': () => ({ osUser: 'tester', socketPath: null }),
+      'connection.recent': () => [
+        saved({
+          id: 'sock',
+          label: 'me@/var/run/postgresql/app',
+          kind: 'socket',
+        }),
+        saved({ id: 'tcp' }),
+      ],
+    });
+    const user = userEvent.setup();
+    render(<Connect onOpened={vi.fn()} />);
+    expect(await screen.findByRole('tab', { name: 'Fields' })).toBeVisible();
+    expect(
+      screen.getByRole('tab', { name: 'Connection string' }),
+    ).toBeVisible();
+    expect(screen.queryByRole('tab', { name: 'Local socket' })).toBeNull();
+
+    const socket = await screen.findByRole('button', {
+      name: 'me@/var/run/postgresql/app',
+    });
+    expect(socket).toBeDisabled();
+    expect(screen.getByText(/Unix sockets are not available/)).toBeVisible();
+    await user.click(socket);
+    expect(calls.filter((c) => c.channel === 'connection.openSaved')).toEqual(
+      [],
+    );
+    expect(
+      screen.getByRole('button', { name: 'alice@db.example.com:5432/app' }),
+    ).toBeEnabled();
   });
 
   test('a remote host defaults to require, and back to disable for a local one', async () => {

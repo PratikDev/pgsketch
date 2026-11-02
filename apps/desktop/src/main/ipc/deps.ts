@@ -31,5 +31,5 @@ export interface IpcDeps {
   /** How often the open database is looked at for changes from outside. */
   pollMs: number;
   osUser: string;
-  socketPath: string;
+  socketPath: string | null;
 }

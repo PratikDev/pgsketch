@@ -10,11 +10,8 @@ import type {
 } from '../../../../shared/ipc-contract';
 import { connectSchema, initialValues } from './connect-schema';
 
-/** Used until the main process answers, and if it never does. */
-const FALLBACK_DEFAULTS: ConnectionDefaults = {
-  osUser: '',
-  socketPath: '/var/run/postgresql',
-};
+/** Used until the main process answers, and if it never does: no socket until it says there is one. */
+const FALLBACK_DEFAULTS: ConnectionDefaults = { osUser: '', socketPath: null };
 
 /** The Connect screen: its form, the recent connections, and opening one. */
 export function useConnectScreen(onOpened: (session: SessionInfo) => void) {

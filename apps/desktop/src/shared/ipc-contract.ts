@@ -129,7 +129,8 @@ export type ExpressionColumnInput = z.infer<typeof expressionColumnSchema>;
 
 export interface ConnectionDefaults {
   osUser: string;
-  socketPath: string;
+  /** The folder of the local Postgres socket; null where the system has none (Windows). */
+  socketPath: string | null;
 }
 
 export type ConnectionTestResult =
