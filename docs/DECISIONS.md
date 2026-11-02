@@ -1240,3 +1240,18 @@ A generated schema (`public.t_1` … `t_N`: twelve columns each, an identity key
 **The rows' `title` tooltips stay as they are,** and cost nothing at all next to this. Moving them to `Tooltip` waits for the canvas to be fast zoomed in: 11 000 more triggers would not help.
 
 **Not done here:** finding and fixing what re-renders on a pan. That is a task of its own.
+
+## README rewritten, with the film and recorded animations
+
+**Date & time:** 2026-11-02 19:27
+
+The README is now a guide to the whole project: why it exists, a tour with a picture or an animation for each feature, the real generated SQL, the safety model, what is and is not edited, install, how it works, how it is tested, and the roadmap. It links the build plan and this file for the reasoning and does not copy them.
+
+- **The film lives in `docs/media/pgsketch-friday.mp4`**, and `docs/media/hero.gif` is its first 22 seconds. The README embeds the GIF and links the MP4: GitHub plays a repository MP4 on its own page, but a relative `<video>` in a README is not reliable. The film's source project (HyperFrames, with the recordings) is not in this repository.
+- **The four feature animations are recorded by `e2e/recordings.spec.ts`**, gated by `PGSKETCH_RECORDINGS=1` like the screenshots, so they can be made again when the interface changes. `e2e/recorder.ts` records with Chromium's screencast, draws the pencil into the page, and encodes one GIF with `ffmpeg`. They show the real app on `basic.sql`: a rename and a type change, a foreign key dragged between two rows, a removed column restored, and SQL run from outside being adopted.
+- **`emptyPoint` moved from `editor.spec.ts` to `e2e/canvas.ts`**, so the editor tests and the recordings share one.
+- **A row is found by its place in the recordings, not by its name**, because a rename changes the name the other lookups use. Typing waits until an input has the focus: the first key of a new input is lost otherwise.
+- **The README says the canvas is slow zoomed in on very large schemas**, from the measurements above, and not that a big schema stays usable.
+- **No licence section**: the repository has no `LICENSE` yet, and choosing one is not a README decision.
+
+**Rationale:** the old README said how to use the app and said nothing of what it is for or how it keeps your database safe, which is the whole point of the project.
