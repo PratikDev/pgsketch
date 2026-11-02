@@ -1,7 +1,7 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, win32 } from 'node:path';
-import { localAppData } from './platform-paths';
+import { dirname } from 'node:path';
+import { localAppData, pathsOf } from './platform-paths';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -117,13 +117,14 @@ export function defaultLogPath(
   home: string = homedir(),
   platform: NodeJS.Platform = process.platform,
 ): string {
+  const path = pathsOf(platform);
   if (platform === 'win32')
-    return win32.join(localAppData(env, home), 'pgsketch', 'logs', 'main.log');
+    return path.join(localAppData(env, home), 'pgsketch', 'logs', 'main.log');
   const stateHome =
-    env.XDG_STATE_HOME && isAbsolute(env.XDG_STATE_HOME)
+    env.XDG_STATE_HOME && path.isAbsolute(env.XDG_STATE_HOME)
       ? env.XDG_STATE_HOME
-      : join(home, '.local', 'state');
-  return join(stateHome, 'pgsketch', 'main.log');
+      : path.join(home, '.local', 'state');
+  return path.join(stateHome, 'pgsketch', 'main.log');
 }
 
 /**
