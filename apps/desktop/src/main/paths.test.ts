@@ -52,3 +52,42 @@ describe('resolveAppPaths', () => {
     ).toMatch(/^\/.*\/here$/);
   });
 });
+
+describe('resolveAppPaths on Windows', () => {
+  const home = 'C:\\Users\\me';
+
+  test('the data and the log are under %LOCALAPPDATA%, which does not roam', () => {
+    expect(
+      resolveAppPaths({ LOCALAPPDATA: 'D:\\Local' }, home, 'win32'),
+    ).toEqual({
+      dataDir: 'D:\\Local\\pgsketch',
+      dbFile: 'D:\\Local\\pgsketch\\pgsketch.db',
+      logFile: 'D:\\Local\\pgsketch\\logs\\main.log',
+    });
+  });
+
+  test('a missing or relative LOCALAPPDATA falls back to the profile folder, and the XDG variables are ignored', () => {
+    const fallback = 'C:\\Users\\me\\AppData\\Local\\pgsketch';
+    expect(resolveAppPaths({}, home, 'win32').dataDir).toBe(fallback);
+    expect(
+      resolveAppPaths({ LOCALAPPDATA: 'relative' }, home, 'win32').dataDir,
+    ).toBe(fallback);
+    expect(
+      resolveAppPaths({ XDG_DATA_HOME: '/data' }, home, 'win32').dataDir,
+    ).toBe(fallback);
+  });
+
+  test('PGSKETCH_DATA_DIR still wins, with the log beside the database', () => {
+    expect(
+      resolveAppPaths(
+        { PGSKETCH_DATA_DIR: 'E:\\test-1', LOCALAPPDATA: 'D:\\Local' },
+        home,
+        'win32',
+      ),
+    ).toEqual({
+      dataDir: 'E:\\test-1',
+      dbFile: 'E:\\test-1\\pgsketch.db',
+      logFile: 'E:\\test-1\\main.log',
+    });
+  });
+});

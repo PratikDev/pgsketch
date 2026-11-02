@@ -36,16 +36,21 @@ const KEYRINGS = ['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'];
 /**
  * Passwords are encrypted with the system keyring through `safeStorage`, and refused when there
  * isn't one. `isReady` is `app.isReady`: the backend is only asked once it is true, because Electron
- * answers `unknown` before the `ready` event.
+ * answers `unknown` before the `ready` event. Only Linux has a choice of keyring to look at (the
+ * question is Linux-only in Electron, so it is never asked elsewhere): Windows encrypts with the
+ * signed-in user's own credentials (DPAPI) and macOS with the Keychain, so there `safeStorage` being
+ * able to encrypt is the whole answer.
  */
 export function createSecrets(
   storage: SafeStorageLike,
   isReady: () => boolean,
+  platform: NodeJS.Platform = process.platform,
 ) {
   /** Whether a password can be remembered now, and if not, why. */
   function problem(): SecretsProblem | null {
     if (!isReady()) return 'not-ready';
     if (!storage.isEncryptionAvailable()) return 'unavailable';
+    if (platform !== 'linux') return null;
     return KEYRINGS.includes(storage.getSelectedStorageBackend())
       ? null
       : 'weak-backend';

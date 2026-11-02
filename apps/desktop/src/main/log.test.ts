@@ -163,6 +163,19 @@ describe('where the log goes', () => {
     );
   });
 
+  test('on Windows it is under %LOCALAPPDATA%, whatever XDG_STATE_HOME says', () => {
+    expect(
+      defaultLogPath(
+        { LOCALAPPDATA: 'D:\\Local', XDG_STATE_HOME: '/state' },
+        'C:\\Users\\me',
+        'win32',
+      ),
+    ).toBe('D:\\Local\\pgsketch\\logs\\main.log');
+    expect(defaultLogPath({}, 'C:\\Users\\me', 'win32')).toBe(
+      'C:\\Users\\me\\AppData\\Local\\pgsketch\\logs\\main.log',
+    );
+  });
+
   test('lines are appended to a file only its owner can read, in a folder made on the first write', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pgsketch-log-'));
     const path = join(dir, 'nested', 'main.log');

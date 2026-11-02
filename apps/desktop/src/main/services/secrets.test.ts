@@ -107,3 +107,35 @@ describe('the keyring check', () => {
     expect(secrets.problem()).toBeNull();
   });
 });
+
+describe('on a system that has no choice of keyring', () => {
+  test.each(['win32', 'darwin'] as const)(
+    'on %s it can remember a password whenever the system can encrypt, and never asks for a backend',
+    (platform) => {
+      const s = storage('unknown');
+      const secrets = createSecrets(s, () => true, platform);
+      expect(secrets.problem()).toBeNull();
+      expect(secrets.decrypt(secrets.encrypt('hunter2'))).toBe('hunter2');
+      expect(s.getSelectedStorageBackend).not.toHaveBeenCalled();
+    },
+  );
+
+  test.each(['win32', 'darwin'] as const)(
+    'on %s it is still refused when the system cannot encrypt',
+    (platform) => {
+      const secrets = createSecrets(
+        storage('unknown', false),
+        () => true,
+        platform,
+      );
+      expect(secrets.problem()).toBe('unavailable');
+      refused(() => secrets.encrypt('x'), 'unavailable');
+    },
+  );
+
+  test('before the app is ready it is refused on every system', () => {
+    expect(
+      createSecrets(storage('unknown'), () => false, 'win32').problem(),
+    ).toBe('not-ready');
+  });
+});

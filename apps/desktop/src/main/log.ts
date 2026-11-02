@@ -1,6 +1,7 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join } from 'node:path';
+import { dirname, isAbsolute, join, win32 } from 'node:path';
+import { localAppData } from './platform-paths';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -107,11 +108,17 @@ export function createLogger({
   };
 }
 
-/** `~/.local/state/pgsketch/main.log`, or under `XDG_STATE_HOME` when that is set to a path. */
+/**
+ * `~/.local/state/pgsketch/main.log` on Linux, or under `XDG_STATE_HOME` when that is set to a
+ * path; `%LOCALAPPDATA%\pgsketch\logs\main.log` on Windows.
+ */
 export function defaultLogPath(
   env: Record<string, string | undefined> = process.env,
   home: string = homedir(),
+  platform: NodeJS.Platform = process.platform,
 ): string {
+  if (platform === 'win32')
+    return win32.join(localAppData(env, home), 'pgsketch', 'logs', 'main.log');
   const stateHome =
     env.XDG_STATE_HOME && isAbsolute(env.XDG_STATE_HOME)
       ? env.XDG_STATE_HOME
