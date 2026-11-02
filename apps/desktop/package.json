@@ -19,7 +19,8 @@
     "test": "vitest run --project renderer --project main",
     "test:db": "vitest run --project db",
     "test:e2e": "electron-vite build && playwright test",
-    "package": "pnpm build && electron-builder --linux deb"
+    "package": "pnpm build && electron-builder --linux deb",
+    "package:win": "pnpm build && electron-builder --win nsis"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",

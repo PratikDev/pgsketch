@@ -8,6 +8,12 @@ directories:
 files:
   - out/**
   - package.json
+# the licence texts go beside the program: the project's own, and the one the font asks to travel with it
+extraFiles:
+  - from: ../../LICENSE
+    to: LICENSE
+  - from: node_modules/@fontsource-variable/geist/LICENSE
+    to: OFL.txt
 linux:
   target:
     - deb
@@ -36,3 +42,16 @@ deb:
     - libuuid1
     - libsecret-1-0
     - libasound2t64 | libasound2
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: pgsketch_${version}_x64_setup.${ext}
+nsis:
+  # per user, so it installs without an administrator prompt, like `apt remove` it keeps the
+  # saved connections and drafts, and the person can pick the folder
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false

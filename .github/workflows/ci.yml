@@ -74,3 +74,55 @@ jobs:
         with:
           name: pgsketch-deb
           path: apps/desktop/dist/pgsketch_*_amd64.deb
+
+  # lint, typecheck and the unit and component tests on Windows: path separators, line endings and
+  # anything else Linux cannot show. The Docker-based tests stay on Linux, where containers run.
+  check-windows:
+    runs-on: windows-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  package-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @pgsketch/desktop package:win
+      # the installed program, not the unpacked folder: the installer itself is what is tested. It
+      # is per user, so no administrator is needed
+      - name: Install silently
+        run: |
+          $setup = (Get-ChildItem apps/desktop/dist/pgsketch_*_x64_setup.exe).FullName
+          Start-Process -FilePath $setup -ArgumentList '/S' -Wait
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\pgsketch'
+          foreach ($name in 'pgsketch.exe', 'LICENSE', 'OFL.txt') {
+            if (-not (Test-Path (Join-Path $dir $name))) { throw "$name was not installed in $dir" }
+          }
+          "PGSKETCH_EXECUTABLE=$dir\pgsketch.exe" | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
+      - run: pnpm --filter @pgsketch/desktop exec playwright test e2e/packaged.spec.ts
+      # `_?=` makes the uninstaller run where it is and wait, instead of copying itself away and returning at once
+      - name: Uninstall silently
+        run: |
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\pgsketch'
+          Start-Process -FilePath (Join-Path $dir 'Uninstall pgsketch.exe') -ArgumentList '/S', "_?=$dir" -Wait
+          if (Test-Path (Join-Path $dir 'pgsketch.exe')) { throw 'the program is still installed' }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pgsketch-setup
+          path: apps/desktop/dist/pgsketch_*_x64_setup.exe

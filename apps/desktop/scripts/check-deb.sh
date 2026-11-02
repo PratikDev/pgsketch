@@ -13,6 +13,7 @@ for image in ubuntu:24.04 debian:12; do
     apt-get update -qq >/dev/null 2>&1
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq /pgsketch.deb xvfb >/dev/null 2>&1
     test -x /opt/pgsketch/pgsketch
+    test -f /opt/pgsketch/LICENSE && test -f /opt/pgsketch/OFL.txt
     test -f /usr/share/applications/pgsketch.desktop
     test -f /usr/share/icons/hicolor/512x512/apps/pgsketch.png && test -f /usr/share/icons/hicolor/48x48/apps/pgsketch.png
     useradd -m tester

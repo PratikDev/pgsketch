@@ -46,7 +46,7 @@ const electronPath = join(
   'node_modules',
   'electron',
   'dist',
-  'electron',
+  process.platform === 'win32' ? 'electron.exe' : 'electron',
 );
 
 /**
@@ -55,10 +55,14 @@ const electronPath = join(
  * sandbox, and without the flag the process is killed before it opens a window.
  */
 export const spawnApp = (dataDir: string, args: string[] = []): ChildProcess =>
-  spawn(electronPath, ['.', '--no-sandbox', ...args], {
-    env: { ...processEnv(), PGSKETCH_DATA_DIR: dataDir },
-    stdio: 'ignore',
-  });
+  spawn(
+    electronPath,
+    ['.', ...(process.platform === 'linux' ? ['--no-sandbox'] : []), ...args],
+    {
+      env: { ...processEnv(), PGSKETCH_DATA_DIR: dataDir },
+      stdio: 'ignore',
+    },
+  );
 
 /**
  * Starts the built app on its own and attaches to it over the DevTools protocol. Playwright's own
