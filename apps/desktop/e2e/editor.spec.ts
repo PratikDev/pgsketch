@@ -6,6 +6,7 @@ import type { TestServer } from '../test/postgres';
 import { launchApp } from './app';
 import {
   changes,
+  emptyPoint,
   rowOf,
   showTable,
   spot,
@@ -413,17 +414,6 @@ test('three columns are made with the keyboard alone, and one is deleted from it
   await expect(table.getByRole('listitem')).toHaveCount(6);
   await app.close();
 });
-
-/** A point on the empty canvas: where the pane, not a table, a line or a control, is under the cursor. */
-const emptyPoint = (window: Page) =>
-  window.evaluate<{ x: number; y: number }>(`(() => {
-    const box = document.querySelector('.react-flow').getBoundingClientRect();
-    for (let y = box.top + 30; y < box.bottom - 80; y += 30)
-      for (let x = box.left + 30; x < box.right - 340; x += 30)
-        if (document.elementFromPoint(x, y)?.classList.contains('react-flow__pane'))
-          return { x, y };
-    throw new Error('no empty canvas');
-  })()`);
 
 test('a double-click on the empty canvas makes a table at the cursor with its name ready', async () => {
   const { app, window } = await openEditor();

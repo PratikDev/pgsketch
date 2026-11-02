@@ -70,3 +70,14 @@ export const toastWith = (window: Page, text: string) =>
 /** The tooltip that is showing; one that is on its way out, as the pointer goes on to the next button, is not. */
 export const tooltip = (window: Page) =>
   window.locator('[data-slot="tooltip-content"]:not([data-state="closed"])');
+
+/** A point on the empty canvas: where the pane, not a table, a line or a control, is under the cursor. */
+export const emptyPoint = (window: Page) =>
+  window.evaluate<{ x: number; y: number }>(`(() => {
+    const box = document.querySelector('.react-flow').getBoundingClientRect();
+    for (let y = box.top + 30; y < box.bottom - 80; y += 30)
+      for (let x = box.left + 30; x < box.right - 340; x += 30)
+        if (document.elementFromPoint(x, y)?.classList.contains('react-flow__pane'))
+          return { x, y };
+    throw new Error('no empty canvas');
+  })()`);
