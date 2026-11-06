@@ -1,6 +1,6 @@
 {
   "name": "@pgsketch/desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "description": "Edit a Postgres schema on a canvas and generate the migration SQL",
   "homepage": "https://github.com/PratikDev/pgsketch",
