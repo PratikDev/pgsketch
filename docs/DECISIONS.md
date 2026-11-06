@@ -1221,15 +1221,15 @@ The tooltips on the table toolbar, the PK, NN and UQ badges, the show-password b
 
 A generated schema (`public.t_1` … `t_N`: twelve columns each, an identity key, a unique column, a foreign key to an earlier table, an index) was opened in the built app in a 1280 × 800 window, once with the tooltips and once with `Hint` made a pass-through, to see what they cost. Numbers are from one run each on one machine, so they show size and not precision.
 
-| | 100 tables (1 200 rows) | 300 tables (3 600 rows) |
-| --- | --- | --- |
-| Connect until the layout is ready | 6 to 11 s | 14 to 17 s |
-| Pan zoomed out (compact nodes) | 60 fps | 60 fps |
-| DOM nodes zoomed out / zoomed in | 5 856 / 26 883 | 17 456 / 80 455 |
-| Tooltip triggers zoomed in | 3 606 | 10 801 |
-| Zoom into one table from far out | 7.5 s without, 9.2 s with | 16.8 s without, 19.9 s with |
-| Pan zoomed in, 15 moves | 162 s of long tasks without, 202 s with | did not finish in 15 minutes without; 430 s with (60 moves) |
-| Hover a table until its toolbar shows | 11.7 s without, 9.4 s with | not measured |
+|                                       | 100 tables (1 200 rows)                 | 300 tables (3 600 rows)                                     |
+| ------------------------------------- | --------------------------------------- | ----------------------------------------------------------- |
+| Connect until the layout is ready     | 6 to 11 s                               | 14 to 17 s                                                  |
+| Pan zoomed out (compact nodes)        | 60 fps                                  | 60 fps                                                      |
+| DOM nodes zoomed out / zoomed in      | 5 856 / 26 883                          | 17 456 / 80 455                                             |
+| Tooltip triggers zoomed in            | 3 606                                   | 10 801                                                      |
+| Zoom into one table from far out      | 7.5 s without, 9.2 s with               | 16.8 s without, 19.9 s with                                 |
+| Pan zoomed in, 15 moves               | 162 s of long tasks without, 202 s with | did not finish in 15 minutes without; 430 s with (60 moves) |
+| Hover a table until its toolbar shows | 11.7 s without, 9.4 s with              | not measured                                                |
 
 **The tooltips are not the problem.** They add about 20 to 25 % to a zoom-in and a pan that are already unusable without them. A tooltip that opens takes about 0.2 s. The first group (toolbar, badges, password button, Generate SQL) stays as it is.
 
@@ -1285,3 +1285,15 @@ Built from `docs/pgsketch — Windows Support Plan.md` (phases W-A to W-D; the W
 - **Not done:** the README's Windows install text, signing, a release (W-F), and the manual pass on real Windows hardware (W-E).
 
 **Rationale:** the Windows differences are few and each has one cause; putting each behind an argument or a single response field keeps them testable here and keeps platform names out of the renderer.
+
+## The Windows program had Electron's icon: the icon is set for the Windows build
+
+**Date & time:** 2026-11-06 20:27
+
+Found on the first Windows installer: the Start menu and the taskbar showed the default Electron icon, not the elephant. The cause was in `electron-builder.yml`: only `linux.icon` was set, and electron-builder warns "application icon is not set" and uses Electron's icon when it is not told of one; it does not look for `build/icon.png` by itself.
+
+- **`win.icon: build/icon.png`.** The 1024 px PNG is converted by electron-builder into the 16 to 256 px icons of the `.exe`. Checked here by building `win-unpacked` and reading the resources out of `pgsketch.exe`: seven icons, and the 256 px one is the elephant. No `.ico` is added to the repository, so there is still one source for the icons (`build/icon.png`).
+- **A unit test keeps it set.** `builder-config.test.ts` fails if the `linux` or `win` section of `electron-builder.yml` has no `icon`, or names a file that is missing. It is a test of the file and not a check of the build log, because for Electron electron-builder takes Electron's own icon without a warning, so the build succeeds with the wrong icon and says nothing.
+- **The window's `icon` option stays Linux-only.** On Windows the window and the taskbar use the icon of the executable.
+
+**Rationale:** the CI smoke test proved the installer installs and starts, which is all it could see; the wrong icon was silent in the build and visible only to a person.

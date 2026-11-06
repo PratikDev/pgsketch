@@ -34,14 +34,14 @@ Checked in the code, so it is not on the list below:
 
 ## Decisions to settle first
 
-| Question                                  | Recommendation                                                                                                                                    | Why                                                                                                                                                     |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Installer format                          | NSIS, per user (no administrator prompt), directory choosable                                                                                     | It is electron-builder's default and best-supported target, installs under `%LOCALAPPDATA%\Programs`, and needs no elevation to install or update.     |
-| Where app data goes                       | `%LOCALAPPDATA%\pgsketch` (data and log together)                                                                                                 | Saved connections and drafts belong to one machine. `%APPDATA%` roams between machines on a domain, which would copy an encrypted password to where it cannot be decrypted. |
-| Code signing for the first Windows release | Ship unsigned, say so in the README, and apply for free open-source signing (SignPath Foundation) right after                                    | A certificate costs money and time; SmartScreen's warning is a nuisance, not a block. Signing is a release-time switch that changes no code.            |
-| License | MIT, in the repository since Nov 2, 2026 (`LICENSE`, the `license` field of the three `package.json` files, a README section) | Permissive and free to use, accepted by SignPath's free signing for open-source projects, and compatible with every dependency (elkjs is dual-licensed EPL-2.0 or GPL-3.0-or-later). |
-| What the Windows CI job runs              | Lint, typecheck, unit and component tests, the installer build, and a packaged smoke test. Not the Docker tests                                    | GitHub's Windows runners cannot run Linux containers, which Testcontainers needs. The Linux jobs already cover the database code on 14 to 18.            |
-| Keep the dev scripts in bash              | No: write the two that a contributor needs (`dev:tmp`, the dev database) in Node. Leave `check-deb.sh` (Linux only) and `make-icons.sh` as bash    | A Windows contributor should be able to run `pnpm dev` and `pnpm db:setup` without WSL.                                                                 |
+| Question                                   | Recommendation                                                                                                                                  | Why                                                                                                                                                                                  |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Installer format                           | NSIS, per user (no administrator prompt), directory choosable                                                                                   | It is electron-builder's default and best-supported target, installs under `%LOCALAPPDATA%\Programs`, and needs no elevation to install or update.                                   |
+| Where app data goes                        | `%LOCALAPPDATA%\pgsketch` (data and log together)                                                                                               | Saved connections and drafts belong to one machine. `%APPDATA%` roams between machines on a domain, which would copy an encrypted password to where it cannot be decrypted.          |
+| Code signing for the first Windows release | Ship unsigned, say so in the README, and apply for free open-source signing (SignPath Foundation) right after                                   | A certificate costs money and time; SmartScreen's warning is a nuisance, not a block. Signing is a release-time switch that changes no code.                                         |
+| License                                    | MIT, in the repository since Nov 2, 2026 (`LICENSE`, the `license` field of the three `package.json` files, a README section)                   | Permissive and free to use, accepted by SignPath's free signing for open-source projects, and compatible with every dependency (elkjs is dual-licensed EPL-2.0 or GPL-3.0-or-later). |
+| What the Windows CI job runs               | Lint, typecheck, unit and component tests, the installer build, and a packaged smoke test. Not the Docker tests                                 | GitHub's Windows runners cannot run Linux containers, which Testcontainers needs. The Linux jobs already cover the database code on 14 to 18.                                        |
+| Keep the dev scripts in bash               | No: write the two that a contributor needs (`dev:tmp`, the dev database) in Node. Leave `check-deb.sh` (Linux only) and `make-icons.sh` as bash | A Windows contributor should be able to run `pnpm dev` and `pnpm db:setup` without WSL.                                                                                              |
 
 ## Work items
 
@@ -76,11 +76,11 @@ Checked in the code, so it is not on the list below:
 
 **Solution.** Resolve by platform:
 
-| Platform | Data folder (`pgsketch.db`)       | Log                                              |
-| -------- | --------------------------------- | ------------------------------------------------ |
-| linux    | unchanged                         | unchanged                                        |
-| win32    | `%LOCALAPPDATA%\pgsketch`         | `%LOCALAPPDATA%\pgsketch\logs\main.log`          |
-| darwin   | `~/Library/Application Support/pgsketch` (not built, listed so the table is complete) | `~/Library/Logs/pgsketch/main.log` |
+| Platform | Data folder (`pgsketch.db`)                                                           | Log                                     |
+| -------- | ------------------------------------------------------------------------------------- | --------------------------------------- |
+| linux    | unchanged                                                                             | unchanged                               |
+| win32    | `%LOCALAPPDATA%\pgsketch`                                                             | `%LOCALAPPDATA%\pgsketch\logs\main.log` |
+| darwin   | `~/Library/Application Support/pgsketch` (not built, listed so the table is complete) | `~/Library/Logs/pgsketch/main.log`      |
 
 `PGSKETCH_DATA_DIR` keeps overriding everything, which is how the end-to-end tests isolate themselves. If `LOCALAPPDATA` is unset or not absolute, fall back to `join(home, 'AppData', 'Local')`. `defaultLogPath` and `resolveAppPaths` already take `env` and `home`; add `platform` to both, and make `defaultLogPath` return the Windows path above so the two never disagree.
 
@@ -111,7 +111,7 @@ Checked in the code, so it is not on the list below:
 **Solution.**
 
 - One constant, `APP_ID = 'io.github.pratikdev.pgsketch'`, in `src/shared`. `main/index.ts` passes it to `setAppUserModelId`. A unit test reads `electron-builder.yml` as text and fails if its `appId` line is not the same string, so the two cannot drift.
-- Icon: electron-builder builds the `.exe` and installer icon from `build/icon.png` (1024 px, above its 256 px minimum), so no `.ico` is checked in. Keep passing `icon` to `BrowserWindow` on Linux only: on Windows the executable's own icon is used for the window and the taskbar, so passing a PNG as well adds nothing.
+- Icon: `win.icon: build/icon.png` in `electron-builder.yml` (1024 px, above its 256 px minimum), from which electron-builder embeds 16 to 256 px icons in the `.exe`, the installer and the shortcuts, so no `.ico` is checked in. It must be set: electron-builder only uses an icon it is told of, and without one the program gets Electron's own (found in the first Windows build). A unit test fails if the `linux` or `win` section of the builder config has no icon. Keep passing `icon` to `BrowserWindow` on Linux only: on Windows the executable's own icon is used for the window and the taskbar, so passing a PNG as well adds nothing.
 - Window title and `autoHideMenuBar` stay as they are.
 
 **Test.** The unit test above. Manual: pin the app to the taskbar, relaunch from the pin, and confirm one icon, the right name and the right icon.
@@ -161,10 +161,10 @@ nsis:
 
 **Solution.** Add jobs; change none of the existing ones.
 
-| Job                | Runner           | Does                                                                                                                                                                  |
-| ------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `check-windows`    | `windows-latest` | `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm typecheck`, `pnpm test`. Catches path-separator and line-ending problems that Linux cannot see.                  |
-| `package-windows`  | `windows-latest` | `pnpm package:win`; uploads `pgsketch-setup` as an artifact; runs the smoke test below.                                                                               |
+| Job               | Runner           | Does                                                                                                                                                 |
+| ----------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `check-windows`   | `windows-latest` | `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm typecheck`, `pnpm test`. Catches path-separator and line-ending problems that Linux cannot see. |
+| `package-windows` | `windows-latest` | `pnpm package:win`; uploads `pgsketch-setup` as an artifact; runs the smoke test below.                                                              |
 
 **Packaged smoke test on Windows.** The Linux job installs the `.deb` and runs `e2e/packaged.spec.ts` with `PGSKETCH_EXECUTABLE=/opt/pgsketch/pgsketch`. For Windows:
 
@@ -200,12 +200,12 @@ nsis:
 
 **Problem.** A few things in the test setup are Linux-shaped.
 
-| Where                   | Assumption                                                                                          | Fix                                                                                                                                                                |
-| ----------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `e2e/app.ts`            | `electronPath` is `node_modules/electron/dist/electron`, and `spawnApp` passes `--no-sandbox`        | Use `electron.exe` on Windows (`process.platform === 'win32'`); pass `--no-sandbox` only on Linux, where CI needs it.                                              |
-| `e2e/*` and CI          | The e2e tests start Postgres with Testcontainers; `xvfb` provides a display                          | Stay on Linux CI. On Windows run only the unit, component and packaged tests (W8). A later step can point the e2e tests at the runner's preinstalled PostgreSQL, but that is separate work and not assumed here. |
-| Unit tests with paths   | Some build expected paths with `/` or read `XDG_*`                                                   | Run the whole unit suite on `windows-latest` (W8) and fix what differs; expected values should be built with `path.join`, and platform cases with `path.win32` / `path.posix`. |
-| `e2e/screenshots.spec.ts`, `recordings.spec.ts` | Gated, need `ffmpeg` and a display                                                  | Linux only, unchanged. Documented as such.                                                                                                                         |
+| Where                                           | Assumption                                                                                    | Fix                                                                                                                                                                                                              |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `e2e/app.ts`                                    | `electronPath` is `node_modules/electron/dist/electron`, and `spawnApp` passes `--no-sandbox` | Use `electron.exe` on Windows (`process.platform === 'win32'`); pass `--no-sandbox` only on Linux, where CI needs it.                                                                                            |
+| `e2e/*` and CI                                  | The e2e tests start Postgres with Testcontainers; `xvfb` provides a display                   | Stay on Linux CI. On Windows run only the unit, component and packaged tests (W8). A later step can point the e2e tests at the runner's preinstalled PostgreSQL, but that is separate work and not assumed here. |
+| Unit tests with paths                           | Some build expected paths with `/` or read `XDG_*`                                            | Run the whole unit suite on `windows-latest` (W8) and fix what differs; expected values should be built with `path.join`, and platform cases with `path.win32` / `path.posix`.                                   |
+| `e2e/screenshots.spec.ts`, `recordings.spec.ts` | Gated, need `ffmpeg` and a display                                                            | Linux only, unchanged. Documented as such.                                                                                                                                                                       |
 
 ### W12. Documentation
 
@@ -218,14 +218,14 @@ nsis:
 
 Each phase ends with a passing test, as in the build plan. **Status** is kept up to date as work goes.
 
-| Phase | What                                                                                       | Ends when                                                                                 | Status |
-| ----- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ------ |
-| W-A   | W1 to W3, W5 (the constant), W10: platform arguments, keyring rule, data folder, `.gitattributes` | Unit tests for the three platforms pass on Linux CI, and `check-windows` runs green once it exists | done |
-| W-B   | W4: socket mode hidden on Windows                                                          | The Connect-screen component tests pass for both answers, and the Linux e2e Connect tests are unchanged | done |
-| W-C   | W6, W8, W11: Windows build, CI jobs, launcher fixes                                        | `package-windows` builds the installer, installs it silently, and the packaged smoke test passes | working |
-| W-D   | W9: Node ports of `dev:tmp` and the dev database                                           | `pnpm dev:tmp` and `pnpm db:setup` run on Windows and Linux                              | done |
-| W-E   | Manual pass on a real Windows 10 and 11 machine (below)                                    | The checklist is clean, or each failure has a fix or a logged limit                       | todo   |
-| W-F   | W7, W12: README, plan and decisions updated, first signed or unsigned release              | A Windows installer is attached to a release, with its SHA-256                           | todo   |
+| Phase | What                                                                                              | Ends when                                                                                               | Status  |
+| ----- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------- |
+| W-A   | W1 to W3, W5 (the constant), W10: platform arguments, keyring rule, data folder, `.gitattributes` | Unit tests for the three platforms pass on Linux CI, and `check-windows` runs green once it exists      | done    |
+| W-B   | W4: socket mode hidden on Windows                                                                 | The Connect-screen component tests pass for both answers, and the Linux e2e Connect tests are unchanged | done    |
+| W-C   | W6, W8, W11: Windows build, CI jobs, launcher fixes                                               | `package-windows` builds the installer, installs it silently, and the packaged smoke test passes        | working |
+| W-D   | W9: Node ports of `dev:tmp` and the dev database                                                  | `pnpm dev:tmp` and `pnpm db:setup` run on Windows and Linux                                             | done    |
+| W-E   | Manual pass on a real Windows 10 and 11 machine (below)                                           | The checklist is clean, or each failure has a fix or a logged limit                                     | todo    |
+| W-F   | W7, W12: README, plan and decisions updated, first signed or unsigned release                     | A Windows installer is attached to a release, with its SHA-256                                          | todo    |
 
 W-A to W-D can run in order on a Linux machine with CI doing the Windows part. **State:** W-A, W-B and W-D are built and tested on Linux. W-C is built (the `.deb` check passes with the licence files in it, and the builder accepts the Windows configuration) but the two Windows CI jobs have not run yet: it is `done` once they are green on a push. W-E needs Windows hardware or a VM and cannot be replaced by CI.
 
@@ -246,15 +246,15 @@ Things CI cannot see:
 
 ## Risks
 
-| Risk                                                                                          | Mitigation                                                                                                                                               |
-| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `safeStorage` behaves differently on Windows than assumed                                      | W2 isolates it behind the existing `SafeStorageLike` interface, tests the three platforms with fakes, and the manual checklist covers the real call.     |
-| A Windows-only bug that Linux CI cannot show                                                   | `check-windows` and the packaged smoke test run the real code on Windows on every push; the manual pass covers what they cannot.                         |
-| The Windows installer cannot be tested in Docker, so a broken release goes unnoticed           | The silent install, launch and uninstall in `package-windows` are the release gate.                                                                       |
-| Unsigned installers scare users off                                                           | Say so plainly in the README, publish the hash, and pursue free signing straight after the first release.                                                 |
-| Window rendering differs on Windows (fonts, scaling, scrollbars)                               | The manual high-DPI pass. The UI is Chromium on both platforms, so differences should be small, but the canvas has not been looked at on Windows yet.     |
-| Scope creep into macOS and ARM                                                                 | They are listed as non-goals; W1 and W3 are written so adding them later is a table row each.                                                             |
-| The Linux build regresses                                                                      | No existing job or script is changed, only added to; every Linux unit test stays in place and runs unchanged.                                              |
+| Risk                                                                                 | Mitigation                                                                                                                                            |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `safeStorage` behaves differently on Windows than assumed                            | W2 isolates it behind the existing `SafeStorageLike` interface, tests the three platforms with fakes, and the manual checklist covers the real call.  |
+| A Windows-only bug that Linux CI cannot show                                         | `check-windows` and the packaged smoke test run the real code on Windows on every push; the manual pass covers what they cannot.                      |
+| The Windows installer cannot be tested in Docker, so a broken release goes unnoticed | The silent install, launch and uninstall in `package-windows` are the release gate.                                                                   |
+| Unsigned installers scare users off                                                  | Say so plainly in the README, publish the hash, and pursue free signing straight after the first release.                                             |
+| Window rendering differs on Windows (fonts, scaling, scrollbars)                     | The manual high-DPI pass. The UI is Chromium on both platforms, so differences should be small, but the canvas has not been looked at on Windows yet. |
+| Scope creep into macOS and ARM                                                       | They are listed as non-goals; W1 and W3 are written so adding them later is a table row each.                                                         |
+| The Linux build regresses                                                            | No existing job or script is changed, only added to; every Linux unit test stays in place and runs unchanged.                                         |
 
 ## After this
 
