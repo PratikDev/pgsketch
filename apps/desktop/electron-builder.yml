@@ -43,6 +43,8 @@ deb:
     - libsecret-1-0
     - libasound2t64 | libasound2
 win:
+  # without this the executable gets Electron's own icon: electron-builder only looks at the icon it is told of
+  icon: build/icon.png
   target:
     - target: nsis
       arch:
